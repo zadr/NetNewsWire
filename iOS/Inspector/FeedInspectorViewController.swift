@@ -56,6 +56,26 @@ final class FeedInspectorViewController: UITableViewController {
 
 		NotificationCenter.default.addObserver(self, selector: #selector(updateNotificationSettings), name: UIApplication.willEnterForegroundNotification, object: nil)
 
+		NotificationCenter.default.addObserver(self, selector: #selector(updateSiteSignIn), name: .SiteCookiesDidChange, object: nil)
+		updateSiteSignIn()
+	}
+
+	@objc func updateSiteSignIn() {
+		guard let title = SiteSignInViewController.toggleSignInTitle(for: feed) else {
+			tableView.tableFooterView = nil
+			return
+		}
+		var configuration = UIButton.Configuration.gray()
+		configuration.title = title
+		let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
+			guard let self else {
+				return
+			}
+			SiteSignInViewController.toggleSignIn(for: self.feed, from: self)
+		})
+		button.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 64)
+		button.autoresizingMask = [.flexibleWidth]
+		tableView.tableFooterView = button
 	}
 
 	override func viewDidAppear(_ animated: Bool) {

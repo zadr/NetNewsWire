@@ -1144,6 +1144,10 @@ extension MainFeedCollectionViewController {
 				menuElements.append(UIMenu(title: "", options: .displayInline, children: [homePageAction]))
 			}
 
+			if let siteSignInAction = self.siteSignInAction(indexPath: indexPath) {
+				menuElements.append(UIMenu(title: "", options: .displayInline, children: [siteSignInAction]))
+			}
+
 			var pageActions = [UIAction]()
 			if let copyFeedPageAction = self.copyFeedPageAction(indexPath: indexPath) {
 				pageActions.append(copyFeedPageAction)
@@ -1232,6 +1236,21 @@ extension MainFeedCollectionViewController {
 		let action = UIAlertAction(title: title, style: .default) { _ in
 			UIApplication.shared.open(url, options: [:])
 			completion(true)
+		}
+		return action
+	}
+
+	func siteSignInAction(indexPath: IndexPath) -> UIAction? {
+		guard let feed = dataSource.itemIdentifier(for: indexPath)?.node.representedObject as? Feed,
+			  let title = SiteSignInViewController.toggleSignInTitle(for: feed) else {
+			return nil
+		}
+
+		let action = UIAction(title: title, image: UIImage(systemName: "person.crop.circle")) { [weak self] _ in
+			guard let self else {
+				return
+			}
+			SiteSignInViewController.toggleSignIn(for: feed, from: self)
 		}
 		return action
 	}
