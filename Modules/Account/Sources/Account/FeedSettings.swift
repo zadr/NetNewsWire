@@ -168,6 +168,16 @@ import Articles
 		}
 	}
 
+	/// The language the feed declares, such as “en-us”.
+	var language: String? {
+		didSet {
+			if language != oldValue {
+				database.setString(language, for: feedURL, column: .language)
+				postSettingDidChange(.language)
+			}
+		}
+	}
+
 	/// Create from database row (bulk load at startup).
 	init(feedURL: String, row: FeedSettingsDatabase.Row, database: FeedSettingsDatabase) {
 		self.feedURL = feedURL
@@ -188,6 +198,7 @@ import Articles
 		self.folderRelationship = row.folderRelationship
 		self.lastCheckDate = row.lastCheckDate
 		self.lastResponseCode = row.lastResponseCode
+		self.language = row.language
 	}
 
 	/// Create for a new feed not yet in the database.

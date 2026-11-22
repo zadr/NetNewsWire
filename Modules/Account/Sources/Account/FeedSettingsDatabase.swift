@@ -33,6 +33,7 @@ final class FeedSettingsDatabase: Sendable {
 		case folderRelationship
 		case lastCheckDate
 		case lastResponseCode
+		case language
 	}
 
 	struct Row {
@@ -52,6 +53,7 @@ final class FeedSettingsDatabase: Sendable {
 		let folderRelationship: [String: String]?
 		let lastCheckDate: Date?
 		let lastResponseCode: Int?
+		let language: String?
 	}
 
 	let databasePath: String
@@ -68,6 +70,9 @@ final class FeedSettingsDatabase: Sendable {
 			database.runCreateStatements(Self.tableCreationStatements)
 			if !database.columnExists("lastResponseCode", inTableWithName: "feedSettings") {
 				database.executeStatements("ALTER TABLE feedSettings ADD COLUMN lastResponseCode INTEGER;")
+			}
+			if !database.columnExists("language", inTableWithName: "feedSettings") {
+				database.executeStatements("ALTER TABLE feedSettings ADD COLUMN language TEXT;")
 			}
 		}
 		vacuumIfNeeded()
@@ -272,7 +277,7 @@ final class FeedSettingsDatabase: Sendable {
 private extension FeedSettingsDatabase {
 
 	static let tableCreationStatements = """
-	CREATE TABLE IF NOT EXISTS feedSettings (feedURL TEXT PRIMARY KEY, feedID TEXT NOT NULL DEFAULT '', homePageURL TEXT, iconURL TEXT, faviconURL TEXT, editedName TEXT, contentHash TEXT, newArticleNotificationsEnabled INTEGER NOT NULL DEFAULT 0, readerViewAlwaysEnabled INTEGER NOT NULL DEFAULT 0, authors TEXT, conditionalGetInfoLastModified TEXT, conditionalGetInfoEtag TEXT, conditionalGetInfoDate REAL, cacheControlInfoDateCreated REAL, cacheControlInfoMaxAge REAL, externalID TEXT, folderRelationship TEXT, lastCheckDate REAL, lastResponseCode INTEGER);
+	CREATE TABLE IF NOT EXISTS feedSettings (feedURL TEXT PRIMARY KEY, feedID TEXT NOT NULL DEFAULT '', homePageURL TEXT, iconURL TEXT, faviconURL TEXT, editedName TEXT, contentHash TEXT, newArticleNotificationsEnabled INTEGER NOT NULL DEFAULT 0, readerViewAlwaysEnabled INTEGER NOT NULL DEFAULT 0, authors TEXT, conditionalGetInfoLastModified TEXT, conditionalGetInfoEtag TEXT, conditionalGetInfoDate REAL, cacheControlInfoDateCreated REAL, cacheControlInfoMaxAge REAL, externalID TEXT, folderRelationship TEXT, lastCheckDate REAL, lastResponseCode INTEGER, language TEXT);
 	"""
 
 	func row(from resultSet: FMResultSet) -> Row {
@@ -327,7 +332,8 @@ private extension FeedSettingsDatabase {
 			externalID: resultSet.swiftString(forColumn: Column.externalID.rawValue),
 			folderRelationship: folderRelationship,
 			lastCheckDate: lastCheckDate,
-			lastResponseCode: lastResponseCode
+			lastResponseCode: lastResponseCode,
+			language: resultSet.swiftString(forColumn: Column.language.rawValue)
 		)
 	}
 }
