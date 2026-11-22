@@ -21,7 +21,8 @@ extension ArticleRenderer {
 		guard let audioAttachment = transcriptionManager.audioAttachment(for: article) else {
 			return ""
 		}
-		guard transcriptionManager.isSupported || transcriptionManager.hasTranscript(article) else {
+		// With iCloud sync, a device that can’t transcribe can still show transcripts from other devices.
+		guard transcriptionManager.isSupported || TranscriptSyncManager.shared.isSyncEnabled || transcriptionManager.hasTranscript(article) else {
 			return ""
 		}
 		let articleID = article.articleID.escapingSpecialXMLCharacters

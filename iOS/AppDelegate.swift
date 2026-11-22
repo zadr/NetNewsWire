@@ -95,6 +95,7 @@ import Images
 
 		// Silent CloudKit pushes don’t need notification permission. setBadgeCount does.
 		UIApplication.shared.registerForRemoteNotifications()
+		TranscriptSyncManager.shared.start()
 
 		UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .sound, .alert]) { _, _ in }
 
@@ -119,6 +120,10 @@ import Images
 
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
 		Task { @MainActor in
+			if await TranscriptSyncManager.shared.receiveRemoteNotification(userInfo: userInfo) {
+				completionHandler(.newData)
+				return
+			}
 			self.resumeIfNecessary()
 			await AccountManager.shared.receiveRemoteNotification(userInfo: userInfo)
 			self.suspendApplication()

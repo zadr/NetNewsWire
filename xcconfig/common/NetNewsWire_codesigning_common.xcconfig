@@ -9,6 +9,10 @@ DEVELOPMENT_TEAM = M8L2WTLA8W
 PROVISIONING_PROFILE_SPECIFIER =
 DEVELOPER_ENTITLEMENTS =
 
+// CloudKit container for syncing podcast transcripts, shared by the Mac and iOS apps.
+// Used in the entitlements and in Info.plist. Sync turns itself off when the app isn’t signed with it.
+TRANSCRIPTS_CLOUDKIT_CONTAINER = iCloud.$(ORGANIZATION_IDENTIFIER).NetNewsWire.Transcripts
+
 // developers can locally override the Xcode settings for code signing
 // by creating a DeveloperSettings.xcconfig file locally at the appropriate path
 // This allows a pristine project to have code signing set up with the appropriate
