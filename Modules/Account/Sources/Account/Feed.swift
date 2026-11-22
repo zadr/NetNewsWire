@@ -193,6 +193,22 @@ import Articles
 		}
 	}
 
+	/// The language the feed declares, such as “en-us”. Nil when it declares none.
+	/// Only feeds the app reads itself (On My Mac and iCloud accounts) have it, since sync services don’t report it.
+	public var language: String? {
+		get {
+			settings.language
+		}
+		set {
+			let trimmedLanguage = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+			if let trimmedLanguage, !trimmedLanguage.isEmpty {
+				settings.language = trimmedLanguage
+			} else {
+				settings.language = nil
+			}
+		}
+	}
+
 	// MARK: - DisplayNameProvider
 
 	public var nameForDisplay: String {

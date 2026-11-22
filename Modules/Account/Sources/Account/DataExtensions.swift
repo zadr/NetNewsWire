@@ -35,6 +35,7 @@ public extension Feed {
 		case folderRelationship
 		case lastCheckDate
 		case lastResponseCode
+		case language
 	}
 }
 
@@ -46,6 +47,7 @@ extension Feed {
 		homePageURL = parsedFeed.homePageURL
 		name = parsedFeed.title
 		authors = Author.authorsWithParsedAuthors(parsedFeed.authors)
+		language = parsedFeed.language
 	}
 
 	func postFeedSettingDidChangeNotification(_ key: Feed.SettingKey) {
