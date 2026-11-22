@@ -107,6 +107,13 @@
         "identifier" : "ImagesTests",
         "name" : "ImagesTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Modules\/Transcription",
+        "identifier" : "TranscriptionTests",
+        "name" : "TranscriptionTests"
+      }
     }
   ],
   "version" : 1
