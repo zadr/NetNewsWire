@@ -97,8 +97,9 @@ import Testing
 			(.downloadingAudio(fractionCompleted: 0), 0),
 			(.downloadingAudio(fractionCompleted: 1), 0.3),
 			(.installingSpeechModel(fractionCompleted: 0.5), 0.35),
-			(.transcribing(fractionCompleted: 0.5), 0.7),
-			(.transcribing(fractionCompleted: 2), 1)
+			(.transcribing(fractionCompleted: 0.5), 0.675),
+			(.transcribing(fractionCompleted: 2), 0.95),
+			(.identifyingSpeakers, 0.95)
 		]
 		for (progress, expectedFraction) in expectations {
 			let fraction = try? #require(progress.overallFractionCompleted)

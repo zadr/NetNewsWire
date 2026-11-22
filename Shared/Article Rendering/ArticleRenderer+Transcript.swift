@@ -67,16 +67,50 @@ private extension ArticleRenderer {
 	static func transcriptHTML(_ transcript: Transcript) -> String {
 		let title = NSLocalizedString("Transcript", comment: "Transcript heading in article view")
 		var html = "<h2 class=\"nnw-transcript-title\">\(title.escapingSpecialXMLCharacters)</h2>\n"
+		let speakerNumbers = speakerNumbers(in: transcript)
+		var previousSpeakers = [String]()
 		for segment in transcript.segments {
 			html += "<p class=\"nnw-transcript-segment\">"
 			html += "<span class=\"nnw-transcript-time\" data-time=\"\(segment.startTime)\">\(durationString(Int(segment.startTime)))</span> "
-			if let speaker = segment.speaker, !speaker.isEmpty {
-				html += "<span class=\"nnw-transcript-speaker\">\(speaker.escapingSpecialXMLCharacters)</span> "
+			// Label a segment when its speakers differ from the previous segment’s.
+			let speakers = speakers(of: segment)
+			if !speakers.isEmpty && speakers != previousSpeakers {
+				html += "<span class=\"nnw-transcript-speaker\">\(speakerLabel(speakers, numbers: speakerNumbers).escapingSpecialXMLCharacters)</span> "
 			}
+			previousSpeakers = speakers
 			html += segment.text.escapingSpecialXMLCharacters
 			html += "</p>\n"
 		}
 		return html
+	}
+
+	/// The segment’s speaker, or everyone speaking when there’s crosstalk, main speaker first.
+	static func speakers(of segment: TranscriptSegment) -> [String] {
+		if let speakers = segment.speakers, !speakers.isEmpty {
+			return speakers
+		}
+		if let speaker = segment.speaker, !speaker.isEmpty {
+			return [speaker]
+		}
+		return []
+	}
+
+	/// Speakers are numbered from 1 in order of first appearance in the transcript.
+	static func speakerNumbers(in transcript: Transcript) -> [String: Int] {
+		var numbers = [String: Int]()
+		for segment in transcript.segments {
+			for speaker in speakers(of: segment) where numbers[speaker] == nil {
+				numbers[speaker] = numbers.count + 1
+			}
+		}
+		return numbers
+	}
+
+	/// “Speaker 1”, or “Speaker 1 and Speaker 2” when they talk over each other.
+	static func speakerLabel(_ speakers: [String], numbers: [String: Int]) -> String {
+		let format = NSLocalizedString("Speaker %ld", comment: "Speaker label in a podcast transcript; the number is the order in which speakers first appear")
+		let names = speakers.compactMap { numbers[$0] }.map { String(format: format, $0) }
+		return names.formatted(.list(type: .and))
 	}
 
 	static func statusHTML(_ status: String) -> String {
