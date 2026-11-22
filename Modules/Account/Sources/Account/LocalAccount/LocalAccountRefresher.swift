@@ -214,6 +214,10 @@ import os
 		return conditionalGetInfo
 	}
 
+	func downloadSession(_ downloadSession: DownloadSession, cookieHeaderFor url: URL) -> String? {
+		SiteCookies.shared.cookieHeader(for: url)
+	}
+
 	func downloadSession(_ downloadSession: DownloadSession, didReceiveResponse url: URL) {
 		guard let feed = urlToFeedDictionary[url.absoluteString], let owner = activityOwner else {
 			return

@@ -13,6 +13,7 @@ nonisolated public struct HTTPRequestHeader {
 	public static let userAgent = "User-Agent"
 	public static let authorization = "Authorization"
 	public static let contentType = "Content-Type"
+	public static let cookie = "Cookie"
 
 	// Conditional GET
 

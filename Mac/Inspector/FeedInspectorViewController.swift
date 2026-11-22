@@ -20,6 +20,7 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 	@IBOutlet var urlTextField: NSTextField?
 	@IBOutlet var newArticleNotificationsEnabledCheckBox: NSButton!
 	@IBOutlet var readerViewAlwaysEnabledCheckBox: NSButton?
+	@IBOutlet var siteSignInButton: NSButton?
 
 	private var feed: Feed? {
 		didSet {
@@ -55,6 +56,7 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 		updateUI()
 		NotificationCenter.default.addObserver(self, selector: #selector(handleFeedIconImageDidChange(_:)), name: .feedIconImageDidChange, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(updateUI), name: .DidUpdateFeedPreferencesFromContextMenu, object: nil)
+		NotificationCenter.default.addObserver(self, selector: #selector(siteCookiesDidChange(_:)), name: .SiteCookiesDidChange, object: nil)
 	}
 
 	override func viewDidAppear() {
@@ -112,10 +114,29 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 		feed?.readerViewAlwaysEnabled = (readerViewAlwaysEnabledCheckBox?.state ?? .off) == .on ? true : false
 	}
 
+	@IBAction func siteSignInButtonClicked(_ sender: Any) {
+		guard let feed, let feedURL = URL(string: feed.url) else {
+			return
+		}
+		guard SiteCookies.shared.isSignedIn(to: feedURL) else {
+			SiteSignInWindowController.show(for: feed)
+			return
+		}
+		do {
+			try SiteCookies.shared.removeCookies(for: feedURL)
+		} catch {
+			presentError(error)
+		}
+	}
+
 	// MARK: Notifications
 
 	@objc func handleFeedIconImageDidChange(_ notification: Notification) {
 		updateImage()
+	}
+
+	@objc func siteCookiesDidChange(_ note: Notification) {
+		updateSiteSignIn()
 	}
 }
 
@@ -143,6 +164,7 @@ private extension FeedInspectorViewController {
 		updateFeedURL()
 		updateNewArticleNotificationsEnabled()
 		updateReaderViewAlwaysEnabled()
+		updateSiteSignIn()
 		windowTitle = feed?.nameForDisplay ?? NSLocalizedString("Feed Inspector", comment: "Feed Inspector window title")
 		readerViewAlwaysEnabledCheckBox?.isEnabled = true
 		view.needsLayout = true
@@ -180,6 +202,27 @@ private extension FeedInspectorViewController {
 
 	func updateReaderViewAlwaysEnabled() {
 		readerViewAlwaysEnabledCheckBox?.state = (feed?.readerViewAlwaysEnabled ?? false) ? .on : .off
+	}
+
+	func updateSiteSignIn() {
+		guard let siteSignInButton else {
+			return
+		}
+		guard let feed, let feedURL = URL(string: feed.url), let host = SiteCookies.host(for: feedURL) else {
+			siteSignInButton.title = NSLocalizedString("Sign In to Site…", comment: "Feed Inspector sign-in button")
+			siteSignInButton.isEnabled = false
+			return
+		}
+
+		if SiteCookies.shared.isSignedIn(to: feedURL) {
+			siteSignInButton.title = String(format: NSLocalizedString("Sign Out of %@", comment: "Feed Inspector sign-out button"), host)
+		} else {
+			siteSignInButton.title = String(format: NSLocalizedString("Sign In to %@…", comment: "Feed Inspector sign-in button"), host)
+		}
+
+		let canUseCookies = SiteCookies.canUseCookies(for: feed)
+		siteSignInButton.isEnabled = canUseCookies
+		siteSignInButton.toolTip = canUseCookies ? NSLocalizedString("Sign in to get full-text articles from sites that require it.", comment: "Feed Inspector sign-in button tooltip") : NSLocalizedString("Signing in to sites works only for On My Mac and iCloud accounts.", comment: "Feed Inspector sign-in button tooltip")
 	}
 
 	func updateNotificationSettings() {
