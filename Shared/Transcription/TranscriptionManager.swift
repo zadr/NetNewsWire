@@ -148,6 +148,8 @@ extension Notification.Name {
 			description = NSLocalizedString("Downloading speech recognition model…", comment: "Transcript status in article view")
 		case .transcribing:
 			description = NSLocalizedString("Transcribing…", comment: "Transcript status in article view")
+		case .identifyingSpeakers:
+			description = NSLocalizedString("Identifying speakers…", comment: "Transcript status in article view")
 		}
 		guard let fractionCompleted = progress.fractionCompleted else {
 			return description

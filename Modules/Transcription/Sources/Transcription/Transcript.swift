@@ -49,13 +49,17 @@ public struct TranscriptSegment: Codable, Hashable, Sendable {
 	public var words: [TranscriptWord]
 	/// Who’s speaking. Nil until speakers are assigned.
 	public var speaker: String?
+	/// Everyone speaking at some point during the segment when others talk over `speaker`, `speaker` first.
+	/// Nil when there’s no crosstalk.
+	public var speakers: [String]?
 
-	public init(text: String, startTime: TimeInterval, endTime: TimeInterval, words: [TranscriptWord], speaker: String? = nil) {
+	public init(text: String, startTime: TimeInterval, endTime: TimeInterval, words: [TranscriptWord], speaker: String? = nil, speakers: [String]? = nil) {
 		self.text = text
 		self.startTime = startTime
 		self.endTime = endTime
 		self.words = words
 		self.speaker = speaker
+		self.speakers = speakers
 	}
 }
 
@@ -69,12 +73,15 @@ public struct TranscriptWord: Codable, Hashable, Sendable {
 	public var confidence: Double?
 	/// Who’s speaking. Nil until speakers are assigned.
 	public var speaker: String?
+	/// Everyone speaking during the word when several people talk at once, `speaker` first. Nil otherwise.
+	public var speakers: [String]?
 
-	public init(text: String, startTime: TimeInterval, endTime: TimeInterval, confidence: Double? = nil, speaker: String? = nil) {
+	public init(text: String, startTime: TimeInterval, endTime: TimeInterval, confidence: Double? = nil, speaker: String? = nil, speakers: [String]? = nil) {
 		self.text = text
 		self.startTime = startTime
 		self.endTime = endTime
 		self.confidence = confidence
 		self.speaker = speaker
+		self.speakers = speakers
 	}
 }

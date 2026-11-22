@@ -11,17 +11,24 @@ public enum TranscriptionProgress: Equatable, Sendable {
 	case downloadingAudio(fractionCompleted: Double?)
 	case installingSpeechModel(fractionCompleted: Double?)
 	case transcribing(fractionCompleted: Double?)
+	case identifyingSpeakers
 
 	public var fractionCompleted: Double? {
 		switch self {
 		case .downloadingAudio(let fractionCompleted), .installingSpeechModel(let fractionCompleted), .transcribing(let fractionCompleted):
 			return fractionCompleted
+		case .identifyingSpeakers:
+			return nil
 		}
 	}
 
 	/// Progress through all the steps, from 0 to 1, for a single progress bar.
-	/// Transcribing gets most of the bar, since it usually takes longest. Nil when the step’s progress isn’t known.
+	/// Transcribing gets most of the bar, since it usually takes longest; identifying speakers is quick.
+	/// Nil when the step’s progress isn’t known.
 	public var overallFractionCompleted: Double? {
+		if case .identifyingSpeakers = self {
+			return 0.95
+		}
 		guard let fractionCompleted else {
 			return nil
 		}
@@ -32,7 +39,9 @@ public enum TranscriptionProgress: Equatable, Sendable {
 		case .installingSpeechModel:
 			return 0.3 + clampedFraction * 0.1
 		case .transcribing:
-			return 0.4 + clampedFraction * 0.6
+			return 0.4 + clampedFraction * 0.55
+		case .identifyingSpeakers:
+			return 0.95
 		}
 	}
 
@@ -47,7 +56,7 @@ public enum TranscriptionProgress: Equatable, Sendable {
 	/// Equal when the step and whole percent are the same.
 	public func isVisiblyEqual(to other: TranscriptionProgress) -> Bool {
 		switch (self, other) {
-		case (.downloadingAudio, .downloadingAudio), (.installingSpeechModel, .installingSpeechModel), (.transcribing, .transcribing):
+		case (.downloadingAudio, .downloadingAudio), (.installingSpeechModel, .installingSpeechModel), (.transcribing, .transcribing), (.identifyingSpeakers, .identifyingSpeakers):
 			return percentCompleted == other.percentCompleted
 		default:
 			return false

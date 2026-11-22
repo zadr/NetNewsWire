@@ -810,6 +810,9 @@
     "iCloud Storage Stats" : {
       "comment" : "iCloud Storage Stats window title"
     },
+    "Identifying speakers…" : {
+      "comment" : "Transcript status in article view"
+    },
     "Import Failed" : {
       "comment" : "Import Failed"
     },
@@ -1447,6 +1450,9 @@
     },
     "Sort Oldest to Newest" : {
       "comment" : "Sort Oldest to Newest"
+    },
+    "Speaker %ld" : {
+      "comment" : "Speaker label in a podcast transcript; the number is the order in which speakers first appear"
     },
     "Speech transcription doesn’t support the language “%@”." : {
       "comment" : "Transcription error"

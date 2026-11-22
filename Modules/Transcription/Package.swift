@@ -10,9 +10,17 @@ let package = Package(
 			type: .dynamic,
 			targets: ["Transcription"])
 	],
+	dependencies: [
+		.package(path: "../RSCore"),
+		.package(path: "../SpeakerDiarization")
+	],
 	targets: [
 		.target(
 			name: "Transcription",
+			dependencies: [
+				"RSCore",
+				"SpeakerDiarization"
+			],
 			swiftSettings: [
 				.enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 				.enableUpcomingFeature("InferIsolatedConformances"),

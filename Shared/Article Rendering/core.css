@@ -130,6 +130,7 @@ img.twemoji, img.emoji {
 
 .nnw-transcript-speaker {
 	font-weight: 600;
+	margin-right: 0.25em;
 }
 
 .nnw-transcript-status {
