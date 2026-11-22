@@ -23,6 +23,15 @@ import RSCore
 	func downloadSession(_ downloadSession: DownloadSession, httpError statusCode: Int, url: URL)
 	func downloadSession(_ downloadSession: DownloadSession, didFollowRedirectFor url: URL, from fromURL: URL, to toURL: URL, statusCode: Int)
 	func downloadSessionDidComplete(_ downloadSession: DownloadSession)
+	/// A Cookie header to send with the request, for feeds that require signing in.
+	func downloadSession(_ downloadSession: DownloadSession, cookieHeaderFor url: URL) -> String?
+}
+
+public extension DownloadSessionDelegate {
+
+	func downloadSession(_ downloadSession: DownloadSession, cookieHeaderFor url: URL) -> String? {
+		nil
+	}
 }
 
 struct HTTP4xxResponse {
@@ -180,6 +189,11 @@ extension DownloadSession: @preconcurrency URLSessionTaskDelegate {
 
 		var modifiedRequest = request
 
+		// Never forward site cookies to a different host.
+		if let fromHost = response.url?.host()?.lowercased(), fromHost != request.url?.host()?.lowercased() {
+			modifiedRequest.setValue(nil, forHTTPHeaderField: HTTPRequestHeader.cookie)
+		}
+
 		modifiedRequest.addSpecialCaseUserAgentIfNeeded()
 
 		completionHandler(modifiedRequest)
@@ -276,6 +290,9 @@ private extension DownloadSession {
 			var request = URLRequest(url: urlToUse)
 			if let conditionalGetInfo = delegate.downloadSession(self, conditionalGetInfoFor: url) {
 				conditionalGetInfo.addRequestHeadersToURLRequest(&request)
+			}
+			if let cookieHeader = delegate.downloadSession(self, cookieHeaderFor: urlToUse) {
+				request.setValue(cookieHeader, forHTTPHeaderField: HTTPRequestHeader.cookie)
 			}
 			request.addSpecialCaseUserAgentIfNeeded()
 			return request
