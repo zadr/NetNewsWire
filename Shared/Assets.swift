@@ -103,6 +103,9 @@ struct Assets {
 		static let safari = RSImage(symbol: "safari")!
 		static let smartFeed = RSImage(symbol: "gear")!
 		static let trash = RSImage(symbol: "trash")!
+		static let transcribe = RSImage(symbol: "waveform")!
+		static let cancelTranscription = RSImage(symbol: "xmark.circle")!
+		static let retranscribe = RSImage(symbol: "arrow.clockwise")!
 
 		static let settingsSystemSettings = RSImage(symbol: "gear")!
 		static let settingsImportSubscriptions = RSImage(symbol: "square.and.arrow.down")!

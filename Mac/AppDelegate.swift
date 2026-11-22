@@ -162,6 +162,8 @@ let appName = "NetNewsWire"
 			await WebViewConfiguration.compileContentBlockingRules()
 		}
 
+		TranscriptionManager.shared.start()
+
 		// Load now, while the app bundle is readable. A translocated app that gets moved can’t read it later.
 		_ = MainWindowKeyboardHandler.shared
 

@@ -81,6 +81,10 @@ import Images
 
 		registerBackgroundTasks()
 		CacheCleaner.purgeIfNecessary()
+		TranscriptionManager.shared.start()
+		if #available(iOS 26, *) {
+			TranscriptionBackgroundTasks.shared.start()
+		}
 		initializeHomeScreenQuickActions()
 
 		DispatchQueue.main.async {

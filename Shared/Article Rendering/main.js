@@ -176,6 +176,31 @@ function reloadArticleImage(imageSrc) {
 	image.src = imageSrc + "?" + new Date().getTime();
 }
 
+// Replaces the transcript section’s contents, if the page is showing the given article.
+function updateTranscript(articleID, html) {
+	const section = document.getElementById("nnw-transcript");
+	if (section && section.dataset.articleId === articleID) {
+		section.innerHTML = html;
+	}
+}
+
+// Clicking a time in a transcript plays the episode from that time.
+document.addEventListener("click", event => {
+	const time = event.target.closest && event.target.closest(".nnw-transcript-time");
+	if (!time) {
+		return;
+	}
+	const section = document.getElementById("nnw-transcript");
+	const audioURL = section ? section.dataset.audioUrl : null;
+	const audioElements = Array.from(document.querySelectorAll("audio"));
+	const audio = audioElements.find(element => element.getAttribute("src") === audioURL) || audioElements[0];
+	if (!audio) {
+		return;
+	}
+	audio.currentTime = parseFloat(time.dataset.time);
+	audio.play();
+});
+
 function stopMediaPlayback() {
 	document.querySelectorAll("iframe").forEach(element => {
 		var iframeSrc = element.src;

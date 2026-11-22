@@ -659,6 +659,11 @@ extension MainTimelineViewController: UICollectionViewDelegate {
 				menuElements.append(UIMenu(title: "", options: .displayInline, children: [action]))
 			}
 
+			let transcriptionActions = TranscriptionManager.shared.actions(for: article)
+			if !transcriptionActions.isEmpty {
+				menuElements.append(UIMenu(title: "", options: .displayInline, children: transcriptionActions))
+			}
+
 			if let action = self.shareAction(article, indexPath: firstIndex) {
 				menuElements.append(UIMenu(title: "", options: .displayInline, children: [action]))
 			}

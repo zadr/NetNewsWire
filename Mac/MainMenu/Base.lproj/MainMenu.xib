@@ -540,6 +540,21 @@
                                     <action selector="toggleArticleExtractor:" target="-1" id="H3B-RR-1tB"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Transcribe Episode" keyEquivalent="" id="Tc4-pD-Xq1">
+                                <connections>
+                                    <action selector="toggleTranscription:" target="-1" id="Tc4-pD-Xq2"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Re-transcribe Episode" keyEquivalent="" id="Tc4-pD-Xq3">
+                                <connections>
+                                    <action selector="retranscribeEpisode:" target="-1" id="Tc4-pD-Xq4"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Delete Transcript" keyEquivalent="" id="Tc4-pD-Xq5">
+                                <connections>
+                                    <action selector="deleteTranscript:" target="-1" id="Tc4-pD-Xq6"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Open in Browser" keyEquivalent="" id="4iQ-1v-dTa">
                                 <connections>
                                     <action selector="openArticleInBrowser:" target="-1" id="KeH-ES-fpo"/>

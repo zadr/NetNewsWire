@@ -13,6 +13,7 @@ struct UserInfoKey {
 	static let feed = "feed"
 	static let url = "url"
 	static let articlePath = "articlePath"
+	static let articleID = "articleID"
 	static let sidebarItemID = "sidebarItemID"
 	static let feedIdentifier = "feedIdentifier" // legacy
 

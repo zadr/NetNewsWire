@@ -107,6 +107,13 @@ extension TimelineViewController {
 		URLPasteboardWriter.write(urlString: urlString, to: .general)
 	}
 
+	@objc func performTranscriptionCommandFromContextualMenu(_ sender: Any?) {
+		guard let menuItem = sender as? NSMenuItem, let commandAndArticle = menuItem.representedObject as? TranscriptionCommandAndArticle else {
+			return
+		}
+		TranscriptionManager.shared.perform(commandAndArticle.command, on: commandAndArticle.article)
+	}
+
 	@objc func performShareServiceFromContextualMenu(_ sender: Any?) {
 		guard let menuItem = sender as? NSMenuItem, let sharingCommandInfo = menuItem.representedObject as? SharingCommandInfo else {
 			return
@@ -188,6 +195,16 @@ private extension TimelineViewController {
 
 			if let externalLink = articles.first?.externalLink, externalLink != link {
 				menu.addItem(copyExternalURLMenuItem(externalLink))
+			}
+		}
+
+		if articles.count == 1, let article = articles.first {
+			let commands = TranscriptionManager.shared.commands(for: article)
+			if !commands.isEmpty {
+				menu.addSeparatorIfNeeded()
+				for command in commands {
+					menu.addItem(transcriptionMenuItem(command, article))
+				}
 			}
 		}
 
@@ -275,6 +292,10 @@ private extension TimelineViewController {
 		return menuItem(NSLocalizedString("Copy Article URL", comment: "Command"), #selector(copyURLFromContextualMenu(_:)), urlString)
 	}
 
+	func transcriptionMenuItem(_ command: TranscriptionManager.Command, _ article: Article) -> NSMenuItem {
+		menuItem(command.title, #selector(performTranscriptionCommandFromContextualMenu(_:)), TranscriptionCommandAndArticle(command: command, article: article))
+	}
+
 	func copyExternalURLMenuItem(_ urlString: String) -> NSMenuItem {
 		return menuItem(NSLocalizedString("Copy External URL", comment: "Command"), #selector(copyURLFromContextualMenu(_:)), urlString)
 	}
@@ -298,5 +319,16 @@ private final class SharingCommandInfo {
 
 	func perform() {
 		service.perform(withItems: items)
+	}
+}
+
+private final class TranscriptionCommandAndArticle {
+
+	let command: TranscriptionManager.Command
+	let article: Article
+
+	init(command: TranscriptionManager.Command, article: Article) {
+		self.command = command
+		self.article = article
 	}
 }
