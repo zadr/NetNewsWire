@@ -156,6 +156,23 @@ extension SidebarViewController {
 		NotificationCenter.default.post(Notification(name: .DidUpdateFeedPreferencesFromContextMenu))
 	}
 
+	@objc func toggleSiteSignInFromContextMenu(_ sender: Any?) {
+		guard let item = sender as? NSMenuItem,
+			  let feed = item.representedObject as? Feed,
+			  let feedURL = URL(string: feed.url) else {
+			return
+		}
+		guard SiteCookies.shared.isSignedIn(to: feedURL) else {
+			SiteSignInWindowController.show(for: feed)
+			return
+		}
+		do {
+			try SiteCookies.shared.removeCookies(for: feedURL)
+		} catch {
+			NSApplication.shared.presentError(error)
+		}
+	}
+
 	nonisolated func showNotificationsNotEnabledAlert() {
 		DispatchQueue.main.async {
 			let alert = NSAlert()
@@ -271,6 +288,16 @@ private extension SidebarViewController {
 
 		articleExtractorMenuItem.state = feed.readerViewAlwaysEnabled ? .on : .off
 		menu.addItem(articleExtractorMenuItem)
+
+		if SiteCookies.canUseCookies(for: feed), let feedURL = URL(string: feed.url), let host = SiteCookies.host(for: feedURL) {
+			let siteSignInText: String
+			if SiteCookies.shared.isSignedIn(to: feedURL) {
+				siteSignInText = String(format: NSLocalizedString("Sign Out of %@", comment: "Command"), host)
+			} else {
+				siteSignInText = String(format: NSLocalizedString("Sign In to %@…", comment: "Command"), host)
+			}
+			menu.addItem(menuItem(siteSignInText, #selector(toggleSiteSignInFromContextMenu(_:)), feed))
+		}
 
 		menu.addItem(NSMenuItem.separator())
 
