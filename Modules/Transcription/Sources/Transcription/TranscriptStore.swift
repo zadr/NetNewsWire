@@ -24,7 +24,11 @@ public struct TranscriptRecord: Codable, Hashable, Sendable {
 	}
 }
 
-/// Transcripts on disk, one JSON file per article, plus an index of their records.
+/// Transcripts on disk, plus an index of their records.
+///
+/// A transcript is kept once per episode (see `TranscriptStore+Episodes.swift`), and each article’s record
+/// points at it through its audio URL. Transcripts saved before episode keys, and transcripts of audio URLs
+/// that can’t be made into an episode key, are kept in one file per article.
 public final class TranscriptStore: Sendable {
 
 	public let folderURL: URL
@@ -40,8 +44,7 @@ public final class TranscriptStore: Sendable {
 	}
 
 	public func transcript(forArticleID articleID: String) -> Transcript? {
-		let fileURL = fileURL(forArticleID: articleID)
-		guard let data = try? Data(contentsOf: fileURL) else {
+		guard let fileURL = existingFileURL(forArticleID: articleID), let data = try? Data(contentsOf: fileURL) else {
 			return nil
 		}
 		do {
@@ -53,25 +56,75 @@ public final class TranscriptStore: Sendable {
 	}
 
 	public func hasTranscript(forArticleID articleID: String) -> Bool {
-		FileManager.default.fileExists(atPath: fileURL(forArticleID: articleID).path)
+		existingFileURL(forArticleID: articleID) != nil
 	}
 
+	/// Saves the transcript for the record’s episode, replacing any other transcript of it, so every article for the episode shares it.
 	public func save(_ transcript: Transcript, record: TranscriptRecord) throws {
-		try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-		let data = try Self.encoder.encode(transcript)
-		try data.write(to: fileURL(forArticleID: record.articleID), options: .atomic)
+		if let episodeKey = record.episodeKey {
+			try save(transcript, forEpisodeKey: episodeKey)
+			try? FileManager.default.removeItem(at: fileURL(forArticleID: record.articleID))
+		} else {
+			try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+			let data = try Self.encoder.encode(transcript)
+			try data.write(to: fileURL(forArticleID: record.articleID), options: .atomic)
+		}
 		try updateIndex { $0[record.articleID] = record }
 	}
 
+	/// Adds the record when its episode already has a transcript here — another article’s — so the article shares it.
+	/// Returns false when there’s no transcript to share.
+	@discardableResult
+	public func addRecordForExistingEpisodeTranscript(_ record: TranscriptRecord) -> Bool {
+		guard let episodeKey = record.episodeKey, hasTranscript(forEpisodeKey: episodeKey) else {
+			return false
+		}
+		do {
+			try updateIndex { $0[record.articleID] = record }
+			return true
+		} catch {
+			Self.logger.error("TranscriptStore: couldn’t save index: \(error.localizedDescription, privacy: .public)")
+			return false
+		}
+	}
+
+	/// Removes the article’s record, and its transcript unless another article’s record shares it.
 	/// Returns the removed transcript’s record, if it had one.
 	@discardableResult
 	public func removeTranscript(forArticleID articleID: String) -> TranscriptRecord? {
 		try? FileManager.default.removeItem(at: fileURL(forArticleID: articleID))
 		var removedRecord: TranscriptRecord?
+		var remainingRecords = [TranscriptRecord]()
 		try? updateIndex { index in
 			removedRecord = index.removeValue(forKey: articleID)
+			remainingRecords = Array(index.values)
+		}
+		if let removedRecord, let episodeKey = TranscriptCleanup.removableEpisodeKey(afterRemoving: removedRecord, remainingRecords: remainingRecords) {
+			removeTranscript(forEpisodeKey: episodeKey)
 		}
 		return removedRecord
+	}
+
+	/// Removes the episode’s transcript and every record that shares it. Returns the removed records.
+	@discardableResult
+	public func removeTranscripts(forEpisodeKey episodeKey: EpisodeKey) -> [TranscriptRecord] {
+		var removedRecords = [TranscriptRecord]()
+		try? updateIndex { index in
+			removedRecords = index.values.filter { $0.episodeKey == episodeKey }
+			for record in removedRecords {
+				index[record.articleID] = nil
+			}
+		}
+		for record in removedRecords {
+			try? FileManager.default.removeItem(at: fileURL(forArticleID: record.articleID))
+		}
+		removeTranscript(forEpisodeKey: episodeKey)
+		return removedRecords
+	}
+
+	/// Records whose transcript is the episode’s.
+	public func records(forEpisodeKey episodeKey: EpisodeKey) -> [TranscriptRecord] {
+		loadedIndex().values.filter { $0.episodeKey == episodeKey }
 	}
 
 	public var records: [TranscriptRecord] {
@@ -82,7 +135,7 @@ public final class TranscriptStore: Sendable {
 		loadedIndex()[articleID]
 	}
 
-	/// Removes transcript files that have no record, and records that have no file.
+	/// Removes transcript files that have no record — including episode transcripts no record shares — and records that have no file.
 	/// Returns the number of files and records removed.
 	@discardableResult
 	public func removeUnindexedTranscripts() -> Int {
@@ -96,6 +149,14 @@ public final class TranscriptStore: Sendable {
 				try? FileManager.default.removeItem(at: fileURL)
 				removedCount += 1
 			}
+		}
+
+		let episodeFileNames = TranscriptCleanup.referencedEpisodeKeys(Array(index.values)).map { $0.rawValue + ".json" }
+		let referencedEpisodeFileNames = Set(episodeFileNames)
+		let episodeFileURLs = (try? FileManager.default.contentsOfDirectory(at: episodesFolderURL, includingPropertiesForKeys: nil)) ?? []
+		for fileURL in episodeFileURLs where fileURL.pathExtension == "json" && !referencedEpisodeFileNames.contains(fileURL.lastPathComponent) {
+			try? FileManager.default.removeItem(at: fileURL)
+			removedCount += 1
 		}
 
 		let articleIDsWithoutFiles = index.keys.filter { !hasTranscript(forArticleID: $0) }
@@ -118,6 +179,19 @@ public final class TranscriptStore: Sendable {
 
 	static func fileName(forArticleID articleID: String) -> String {
 		SHA256.hash(data: Data(articleID.utf8)).hexString + ".json"
+	}
+
+	/// The article’s own file, for transcripts saved before episode keys, else its episode’s file. Nil when neither exists.
+	func existingFileURL(forArticleID articleID: String) -> URL? {
+		let articleFileURL = fileURL(forArticleID: articleID)
+		if FileManager.default.fileExists(atPath: articleFileURL.path) {
+			return articleFileURL
+		}
+		guard let episodeKey = loadedIndex()[articleID]?.episodeKey else {
+			return nil
+		}
+		let episodeFileURL = fileURL(forEpisodeKey: episodeKey)
+		return FileManager.default.fileExists(atPath: episodeFileURL.path) ? episodeFileURL : nil
 	}
 }
 

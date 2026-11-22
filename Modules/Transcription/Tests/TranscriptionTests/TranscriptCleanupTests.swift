@@ -68,7 +68,7 @@ import Testing
 		let missingFile = record("missing file")
 		try store.save(sampleTranscript(), record: indexed)
 		try store.save(sampleTranscript(), record: missingFile)
-		try FileManager.default.removeItem(at: store.fileURL(forArticleID: missingFile.articleID))
+		try FileManager.default.removeItem(at: #require(store.existingFileURL(forArticleID: missingFile.articleID)))
 		let strayFileURL = store.fileURL(forArticleID: "never indexed")
 		try Data("{}".utf8).write(to: strayFileURL)
 
