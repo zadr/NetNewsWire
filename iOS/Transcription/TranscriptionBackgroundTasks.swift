@@ -47,6 +47,10 @@ import Transcription
 		}
 		let transcriptionManager = TranscriptionManager.shared
 		if transcriptionManager.isTranscribing(articleID: articleID) {
+			guard !transcriptionManager.isCheckingICloud(articleID: articleID) else {
+				// Waits to see whether iCloud has the transcript, which needs no background processing.
+				return
+			}
 			if identifiers[articleID] == nil {
 				submitRequest(articleID: articleID)
 			} else {

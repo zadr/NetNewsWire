@@ -19,7 +19,9 @@ extension Notification.Name {
 /// Transcribes podcast episodes — articles with an audio enclosure — and keeps their transcripts.
 ///
 /// Transcripts are removed along with their articles, feeds, and accounts: a cleanup pass runs at launch,
-/// after refreshing, and when feeds or accounts are removed.
+/// after refreshing, and when feeds or accounts are removed. Cleanup is local: it never deletes from iCloud.
+///
+/// Articles for the same episode share a transcript, which syncs through iCloud — see `TranscriptSyncManager`.
 @MainActor final class TranscriptionManager {
 
 	static let shared = TranscriptionManager()
@@ -62,12 +64,15 @@ extension Notification.Name {
 	/// Waits for feeds and articles to settle after a change before cleaning up.
 	private static let cleanupDelay = Duration.seconds(5)
 
-	private let store = TranscriptStore(folderURL: AppConfig.dataSubfolder(named: "Transcripts"))
+	/// Shared with `TranscriptSyncManager`, so there’s one index.
+	let store = TranscriptStore(folderURL: AppConfig.dataSubfolder(named: "Transcripts"))
 	private let transcriber = Transcriber(audioCacheFolderURL: AppConfig.cacheSubfolder(named: "TranscriptionAudio"))
 	private var states = [String: State]()
 	private var jobs = [String: Job]()
 	private var cachedTranscripts = [(articleID: String, transcript: Transcript)]()
 	private var cleanupTask: Task<Void, Never>?
+	/// Transcriptions checking iCloud before downloading audio.
+	private var articleIDsCheckingICloud = Set<String>()
 
 	private init() {
 		NotificationCenter.default.addObserver(self, selector: #selector(transcriptOwnersMayHaveChanged(_:)), name: .UserDidDeleteAccount, object: nil)
@@ -97,16 +102,23 @@ extension Notification.Name {
 		jobs[articleID] != nil
 	}
 
-	func hasTranscript(_ article: Article) -> Bool {
-		cachedTranscript(for: article.articleID) != nil || store.hasTranscript(forArticleID: article.articleID)
+	/// True when transcribing hasn’t downloaded audio yet because it’s checking iCloud for the transcript.
+	func isCheckingICloud(articleID: String) -> Bool {
+		articleIDsCheckingICloud.contains(articleID)
 	}
 
+	func hasTranscript(_ article: Article) -> Bool {
+		cachedTranscript(for: article.articleID) != nil || store.hasTranscript(forArticleID: article.articleID) || shareEpisodeTranscript(article)
+	}
+
+	/// Nil when there’s no transcript here — in which case it’s looked up in iCloud, and shown if found.
 	func transcript(for article: Article) -> Transcript? {
 		let articleID = article.articleID
 		if let transcript = cachedTranscript(for: articleID) {
 			return transcript
 		}
-		guard let transcript = store.transcript(forArticleID: articleID) else {
+		guard store.hasTranscript(forArticleID: articleID) || shareEpisodeTranscript(article), let transcript = store.transcript(forArticleID: articleID) else {
+			lookUpInICloudIfNeeded(article, hasLocalTranscript: false)
 			return nil
 		}
 		cacheTranscript(transcript, for: articleID)
@@ -154,6 +166,7 @@ extension Notification.Name {
 			return [.cancel]
 		}
 		let hasTranscript = hasTranscript(article)
+		lookUpInICloudIfNeeded(article, hasLocalTranscript: hasTranscript)
 		guard isSupported else {
 			return hasTranscript ? [.deleteTranscript] : []
 		}
@@ -169,8 +182,10 @@ extension Notification.Name {
 			return
 		}
 		switch command {
-		case .transcribe, .retranscribe:
+		case .transcribe:
 			transcribe(article)
+		case .retranscribe:
+			transcribe(article, isRetranscribing: true)
 		case .cancel:
 			cancelTranscription(articleID: article.articleID)
 		case .deleteTranscript:
@@ -199,13 +214,18 @@ extension Notification.Name {
 
 	/// Transcribes in the feed’s language when it declares one that’s supported, else the device’s.
 	/// A new transcript replaces an existing one only once it’s done.
-	func transcribe(_ article: Article) {
-		guard isSupported, !isTranscribing(article), let attachment = audioAttachment(for: article), let audioURL = URL(string: attachment.url) else {
+	///
+	/// Transcribing first checks iCloud, in case another device transcribed the episode. Re-transcribing doesn’t,
+	/// and replaces the transcript in iCloud when it’s done.
+	func transcribe(_ article: Article, isRetranscribing: Bool = false) {
+		guard isSupported, !isTranscribing(article), let attachment = audioAttachment(for: article), let audioURL = URL(string: attachment.url),
+			  let record = transcriptRecord(for: article) else {
 			return
 		}
 
 		let articleID = article.articleID
-		let record = TranscriptRecord(articleID: articleID, accountID: article.accountID, feedID: article.feedID, audioURL: attachment.url)
+		let episodeKey = record.episodeKey
+		let checksICloud = episodeKey != nil && TranscriptLookup.checksICloudBeforeTranscribing(isRetranscribing: isRetranscribing, isSyncEnabled: TranscriptSyncManager.shared.isSyncEnabled)
 		let locales = TranscriptionLocale.candidates(feedLanguage: article.feed?.language, deviceLocale: .current)
 		let title = attachment.title ?? article.title ?? article.feed?.nameForDisplay ?? attachment.url
 		let transcriber = transcriber
@@ -214,12 +234,24 @@ extension Notification.Name {
 		states[articleID] = .inProgress(.downloadingAudio(fractionCompleted: nil))
 		let task = Task { [weak self] in
 			do {
+				if checksICloud, let episodeKey, let transcript = await self?.transcriptFromICloud(episodeKey: episodeKey, articleID: articleID) {
+					try Task.checkCancellation()
+					try store.save(transcript, record: record)
+					self?.transcriptionDidFinish(articleID: articleID, result: .success(transcript))
+					return
+				}
+				try Task.checkCancellation()
 				let transcript = try await transcriber.transcribe(audioURL: audioURL, locales: locales) { progress in
 					Task { @MainActor in
 						self?.transcriptionDidProgress(progress, articleID: articleID)
 					}
 				}
 				try store.save(transcript, record: record)
+				if let episodeKey {
+					TranscriptSyncManager.shared.transcriptWasSaved(transcript, episodeKey: episodeKey)
+					// Other articles for the episode share the new transcript.
+					self?.episodeTranscriptsDidChange([episodeKey])
+				}
 				self?.transcriptionDidFinish(articleID: articleID, result: .success(transcript))
 			} catch {
 				self?.transcriptionDidFinish(articleID: articleID, result: .failure(error))
@@ -245,13 +277,107 @@ extension Notification.Name {
 		postTranscriptionDidChange(articleID: articleID)
 	}
 
+	/// Deletes the transcript for every article for the episode, here and, through iCloud, on the user’s other devices.
 	func deleteTranscript(articleID: String) {
 		guard !isTranscribing(articleID: articleID) else {
 			return
 		}
-		removeTranscript(articleID: articleID)
-		states[articleID] = nil
-		postTranscriptionDidChange(articleID: articleID)
+		guard let record = store.record(forArticleID: articleID), let episodeKey = record.episodeKey else {
+			removeTranscript(articleID: articleID)
+			states[articleID] = nil
+			postTranscriptionDidChange(articleID: articleID)
+			return
+		}
+
+		let removedArticleIDs = Set(store.removeTranscripts(forEpisodeKey: episodeKey).map(\.articleID)).union([articleID])
+		if let audioURL = URL(string: record.audioURL) {
+			transcriber.audioDownloader.removeCachedFile(for: audioURL)
+		}
+		TranscriptSyncManager.shared.transcriptWasDeleted(episodeKey: episodeKey, enclosureURL: record.audioURL)
+		for removedArticleID in removedArticleIDs {
+			cachedTranscripts.removeAll { $0.articleID == removedArticleID }
+			if !isTranscribing(articleID: removedArticleID) {
+				states[removedArticleID] = nil
+			}
+			postTranscriptionDidChange(articleID: removedArticleID)
+		}
+	}
+
+	// MARK: - iCloud
+
+	/// Saves a transcript that another device made for the articles’ episode, and shows it.
+	func transcriptWasFoundInICloud(_ transcript: Transcript, articles: [Article]) {
+		for article in articles where !isTranscribing(article) && !store.hasTranscript(forArticleID: article.articleID) {
+			guard let record = transcriptRecord(for: article) else {
+				continue
+			}
+			do {
+				if !store.addRecordForExistingEpisodeTranscript(record) {
+					try store.save(transcript, record: record)
+				}
+			} catch {
+				Self.logger.error("TranscriptionManager: couldn’t save transcript from iCloud for \(article.articleID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+				continue
+			}
+			states[article.articleID] = nil
+			cacheTranscript(transcript, for: article.articleID)
+			postTranscriptionDidChange(articleID: article.articleID)
+		}
+	}
+
+	/// Another device replaced or deleted these episodes’ transcripts, which were here.
+	func episodeTranscriptsDidChange(_ episodeKeys: [EpisodeKey]) {
+		for episodeKey in episodeKeys {
+			let wasDeleted = !store.hasTranscript(forEpisodeKey: episodeKey)
+			for record in store.records(forEpisodeKey: episodeKey) where !isTranscribing(articleID: record.articleID) {
+				if wasDeleted {
+					store.removeTranscript(forArticleID: record.articleID)
+				}
+				cachedTranscripts.removeAll { $0.articleID == record.articleID }
+				postTranscriptionDidChange(articleID: record.articleID)
+			}
+		}
+	}
+}
+
+// MARK: - Episodes
+
+private extension TranscriptionManager {
+
+	func transcriptRecord(for article: Article) -> TranscriptRecord? {
+		guard let attachment = audioAttachment(for: article) else {
+			return nil
+		}
+		return TranscriptRecord(articleID: article.articleID, accountID: article.accountID, feedID: article.feedID, audioURL: attachment.url)
+	}
+
+	/// When another article for the same episode has a transcript here, shares it with this article. Returns true when shared.
+	func shareEpisodeTranscript(_ article: Article) -> Bool {
+		guard let record = transcriptRecord(for: article) else {
+			return false
+		}
+		return store.addRecordForExistingEpisodeTranscript(record)
+	}
+
+	func lookUpInICloudIfNeeded(_ article: Article, hasLocalTranscript: Bool) {
+		let transcriptSyncManager = TranscriptSyncManager.shared
+		guard TranscriptLookup.looksUpWhenShown(hasLocalTranscript: hasLocalTranscript, isTranscribing: isTranscribing(article), isSyncEnabled: transcriptSyncManager.isSyncEnabled),
+			  let episodeKey = transcriptRecord(for: article)?.episodeKey else {
+			return
+		}
+		transcriptSyncManager.lookUpTranscript(for: article, episodeKey: episodeKey)
+	}
+
+	/// Checks iCloud before downloading audio. Background processing waits until this is done, since it’s usually quick.
+	func transcriptFromICloud(episodeKey: EpisodeKey, articleID: String) async -> Transcript? {
+		articleIDsCheckingICloud.insert(articleID)
+		let transcript = await TranscriptSyncManager.shared.transcriptFromICloud(episodeKey: episodeKey)
+		articleIDsCheckingICloud.remove(articleID)
+		if transcript == nil && isTranscribing(articleID: articleID) {
+			// Transcribing goes on: let background processing start.
+			postTranscriptionDidChange(articleID: articleID)
+		}
+		return transcript
 	}
 }
 
