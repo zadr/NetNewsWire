@@ -315,6 +315,18 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 			return validateToggleArticleExtractor(item)
 		}
 
+		if item.action == #selector(toggleTranscription(_:)) {
+			return validateToggleTranscription(item)
+		}
+
+		if item.action == #selector(retranscribeEpisode(_:)) {
+			return canPerformTranscriptionCommand(.retranscribe)
+		}
+
+		if item.action == #selector(deleteTranscript(_:)) {
+			return canPerformTranscriptionCommand(.deleteTranscript)
+		}
+
 		if item.action == #selector(toolbarShowShareMenu(_:)) {
 			return canShowShareMenu()
 		}
@@ -522,6 +534,27 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 			startArticleExtractorForCurrentLink()
 		}
 
+	}
+
+	@IBAction func toggleTranscription(_ sender: Any?) {
+		guard let article = oneSelectedArticle else {
+			return
+		}
+		TranscriptionManager.shared.toggleTranscription(article)
+	}
+
+	@IBAction func retranscribeEpisode(_ sender: Any?) {
+		guard let article = oneSelectedArticle else {
+			return
+		}
+		TranscriptionManager.shared.perform(.retranscribe, on: article)
+	}
+
+	@IBAction func deleteTranscript(_ sender: Any?) {
+		guard let article = oneSelectedArticle else {
+			return
+		}
+		TranscriptionManager.shared.perform(.deleteTranscript, on: article)
 	}
 
 	@IBAction func markAllAsReadAndGoToNextUnread(_ sender: Any?) {
@@ -1581,6 +1614,23 @@ private extension MainWindowController {
 		}
 
 		return state != .processing
+	}
+
+	func validateToggleTranscription(_ item: NSValidatedUserInterfaceItem) -> Bool {
+		let transcriptionManager = TranscriptionManager.shared
+		let article = oneSelectedArticle
+		(item as? NSMenuItem)?.title = transcriptionManager.toggleTranscriptionCommandTitle(article)
+		guard let article else {
+			return false
+		}
+		return transcriptionManager.canToggleTranscription(article)
+	}
+
+	func canPerformTranscriptionCommand(_ command: TranscriptionManager.Command) -> Bool {
+		guard let article = oneSelectedArticle else {
+			return false
+		}
+		return TranscriptionManager.shared.canPerform(command, on: article)
 	}
 
 	func canMarkAboveArticlesAsRead() -> Bool {

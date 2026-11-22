@@ -301,6 +301,7 @@ private extension ArticleRenderer {
 			enclosures = Self.routingThumbnailImages(enclosures, thumbnailURL: thumbnailURL, baseURL: baseURL)
 			primaryMediaHTML = Self.routingThumbnailImages(primaryMediaHTML, thumbnailURL: thumbnailURL, baseURL: baseURL)
 		}
+		enclosures += Self.transcriptSectionHTML(article: article)
 		d[Self.primaryMediaKey] = primaryMediaHTML
 		if template().contains(Self.enclosuresMacro) {
 			d["body"] = body

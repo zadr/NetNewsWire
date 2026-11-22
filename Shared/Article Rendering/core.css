@@ -106,6 +106,37 @@ img.twemoji, img.emoji {
 	font-size: 0.9em;
 }
 
+/* Transcript of a podcast episode, after the enclosures */
+
+.nnw-transcript {
+	margin-top: 1.5em;
+}
+
+.nnw-transcript-title {
+	font-size: 1.2em;
+}
+
+.nnw-transcript-time {
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.6;
+	cursor: pointer;
+	margin-right: 0.25em;
+}
+
+.nnw-transcript-time:hover {
+	opacity: 1;
+}
+
+.nnw-transcript-speaker {
+	font-weight: 600;
+}
+
+.nnw-transcript-status {
+	font-size: 0.9em;
+	opacity: 0.7;
+}
+
 /* Hide the external link at the bottom of Daring Fireball posts */
 
 .x-netnewswire-hide {

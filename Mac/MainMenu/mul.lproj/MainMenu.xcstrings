@@ -1987,6 +1987,42 @@
         }
       }
     },
+    "Tc4-pD-Xq1.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Transcribe Episode\"; ObjectID = \"Tc4-pD-Xq1\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transcribe Episode"
+          }
+        }
+      }
+    },
+    "Tc4-pD-Xq3.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Re-transcribe Episode\"; ObjectID = \"Tc4-pD-Xq3\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Re-transcribe Episode"
+          }
+        }
+      }
+    },
+    "Tc4-pD-Xq5.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Delete Transcript\"; ObjectID = \"Tc4-pD-Xq5\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete Transcript"
+          }
+        }
+      }
+    },
     "Td7-aD-5lo.title" : {
       "comment" : "Class = \"NSMenu\"; title = \"Window\"; ObjectID = \"Td7-aD-5lo\";",
       "extractionState" : "extracted_with_value",

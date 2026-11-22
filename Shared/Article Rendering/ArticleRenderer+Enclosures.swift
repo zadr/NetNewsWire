@@ -101,6 +101,16 @@ extension ArticleRenderer {
 		return html
 	}
 
+	/// Such as “1:54:09”, or “4:05” under an hour.
+	static func durationString(_ durationInSeconds: Int) -> String {
+		let hours = durationInSeconds / secondsPerHour
+		let minutes = (durationInSeconds % secondsPerHour) / secondsPerMinute
+		let seconds = durationInSeconds % secondsPerMinute
+		if hours > 0 {
+			return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+		}
+		return String(format: "%d:%02d", minutes, seconds)
+	}
 }
 
 private extension ArticleRenderer {
@@ -120,16 +130,6 @@ private extension ArticleRenderer {
 			components.append(ByteCountFormatter.string(fromByteCount: Int64(sizeInBytes), countStyle: .file))
 		}
 		return components.joined(separator: " · ")
-	}
-
-	static func durationString(_ durationInSeconds: Int) -> String {
-		let hours = durationInSeconds / secondsPerHour
-		let minutes = (durationInSeconds % secondsPerHour) / secondsPerMinute
-		let seconds = durationInSeconds % secondsPerMinute
-		if hours > 0 {
-			return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-		}
-		return String(format: "%d:%02d", minutes, seconds)
 	}
 
 	static func fileName(_ urlString: String) -> String? {

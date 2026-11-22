@@ -127,6 +127,7 @@ final class DetailWebViewController: NSViewController {
 			}
 		}
 		NotificationCenter.default.addObserver(self, selector: #selector(currentArticleThemeDidChangeNotification(_:)), name: .CurrentArticleThemeDidChangeNotification, object: nil)
+		NotificationCenter.default.addObserver(self, selector: #selector(transcriptionDidChange(_:)), name: .transcriptionDidChange, object: nil)
 
 		webView.loadFileURL(ArticleRenderer.blank.url, allowingReadAccessTo: ArticleRenderer.blank.baseURL)
 	}
@@ -158,6 +159,17 @@ final class DetailWebViewController: NSViewController {
 
 	@objc func currentArticleThemeDidChangeNotification(_ note: Notification) {
 		reloadHTMLMaintainingScrollPosition()
+	}
+
+	/// Updates the transcript in place, so a playing episode keeps playing.
+	@objc func transcriptionDidChange(_ notification: Notification) {
+		guard let article, article.articleID == notification.userInfo?[UserInfoKey.articleID] as? String else {
+			return
+		}
+		guard let javaScript = ArticleRenderer.updateTranscriptJavaScript(article: article) else {
+			return
+		}
+		webView.evaluateJavaScript(javaScript)
 	}
 
 	// MARK: Media Functions

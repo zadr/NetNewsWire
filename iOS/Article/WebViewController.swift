@@ -98,6 +98,7 @@ final class WebViewController: UIViewController {
 		NotificationCenter.default.addObserver(self, selector: #selector(currentArticleThemeDidChangeNotification(_:)), name: .CurrentArticleThemeDidChangeNotification, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(handleSceneDidEnterBackground(_:)), name: UIScene.didEnterBackgroundNotification, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(handleUserDefaultsDidChange(_:)), name: UserDefaults.didChangeNotification, object: nil)
+		NotificationCenter.default.addObserver(self, selector: #selector(handleTranscriptionDidChange(_:)), name: .transcriptionDidChange, object: nil)
 
 		// Configure the tap zones
 		configureTopShowBarsView()
@@ -158,6 +159,17 @@ final class WebViewController: UIViewController {
 
 	@objc func handleGrayscaleIconsDidChange(_ notification: Notification) {
 		reloadArticleImage()
+	}
+
+	/// Updates the transcript in place, so a playing episode keeps playing.
+	@objc func handleTranscriptionDidChange(_ notification: Notification) {
+		guard let article, article.articleID == notification.userInfo?[UserInfoKey.articleID] as? String else {
+			return
+		}
+		guard let javaScript = ArticleRenderer.updateTranscriptJavaScript(article: article) else {
+			return
+		}
+		webView?.evaluateJavaScript(javaScript)
 	}
 
 	@objc func currentArticleThemeDidChangeNotification(_ note: Notification) {
@@ -384,7 +396,11 @@ final class WebViewController: UIViewController {
 
 	func showActivityDialog(popOverBarButtonItem: UIBarButtonItem? = nil) {
 		guard let url = article?.preferredURL else { return }
-		let activityViewController = UIActivityViewController(url: url, title: article?.title, applicationActivities: [FindInArticleActivity(), OpenInBrowserActivity()])
+		var applicationActivities: [UIActivity] = [FindInArticleActivity(), OpenInBrowserActivity()]
+		if let article {
+			applicationActivities += TranscriptionActivity.activities(for: article)
+		}
+		let activityViewController = UIActivityViewController(url: url, title: article?.title, applicationActivities: applicationActivities)
 		activityViewController.popoverPresentationController?.barButtonItem = popOverBarButtonItem
 		present(activityViewController, animated: true)
 	}
@@ -461,6 +477,12 @@ extension WebViewController: UIContextMenuInteractionDelegate {
 			}
 
 			menus.append(UIMenu(title: "", options: .displayInline, children: [self.toggleArticleExtractorAction()]))
+			if let article = self.article {
+				let transcriptionActions = TranscriptionManager.shared.actions(for: article)
+				if !transcriptionActions.isEmpty {
+					menus.append(UIMenu(title: "", options: .displayInline, children: transcriptionActions))
+				}
+			}
 			menus.append(UIMenu(title: "", options: .displayInline, children: [self.shareAction()]))
 
 			return UIMenu(title: "", children: menus)
