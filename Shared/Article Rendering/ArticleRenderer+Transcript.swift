@@ -69,19 +69,32 @@ private extension ArticleRenderer {
 		var html = "<h2 class=\"nnw-transcript-title\">\(title.escapingSpecialXMLCharacters)</h2>\n"
 		let speakerNumbers = speakerNumbers(in: transcript)
 		var previousSpeakers = [String]()
-		for segment in transcript.segments {
+		for paragraph in TranscriptParagraph.paragraphs(from: transcript.segments) {
+			let segment = paragraph.segment
 			html += "<p class=\"nnw-transcript-segment\">"
 			html += "<span class=\"nnw-transcript-time\" data-time=\"\(segment.startTime)\">\(durationString(Int(segment.startTime)))</span> "
-			// Label a segment when its speakers differ from the previous segment’s.
+			// Label a paragraph when its speakers differ from the previous paragraph’s.
 			let speakers = speakers(of: segment)
 			if !speakers.isEmpty && speakers != previousSpeakers {
 				html += "<span class=\"nnw-transcript-speaker\">\(speakerLabel(speakers, numbers: speakerNumbers).escapingSpecialXMLCharacters)</span> "
 			}
 			previousSpeakers = speakers
 			html += segment.text.escapingSpecialXMLCharacters
+			for interjection in paragraph.interjections {
+				html += " <span class=\"nnw-transcript-interjection\">\(interjectionText(interjection, numbers: speakerNumbers).escapingSpecialXMLCharacters)</span>"
+			}
 			html += "</p>\n"
 		}
 		return html
+	}
+
+	/// Such as “[Speaker 2: Yeah, agreed.]”.
+	static func interjectionText(_ segment: TranscriptSegment, numbers: [String: Int]) -> String {
+		guard let speaker = segment.speaker else {
+			return segment.text
+		}
+		let format = NSLocalizedString("[%1$@: %2$@]", comment: "Brief interjection by another speaker in a podcast transcript, such as “[Speaker 2: Yeah.]”; the first value is the speaker, the second what they said")
+		return String(format: format, speakerLabel([speaker], numbers: numbers), segment.text)
 	}
 
 	/// The segment’s speaker, or everyone speaking when there’s crosstalk, main speaker first.

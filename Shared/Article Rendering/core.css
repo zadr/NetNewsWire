@@ -133,6 +133,10 @@ img.twemoji, img.emoji {
 	margin-right: 0.25em;
 }
 
+.nnw-transcript-interjection {
+	opacity: 0.7;
+}
+
 .nnw-transcript-status {
 	font-size: 0.9em;
 	opacity: 0.7;
