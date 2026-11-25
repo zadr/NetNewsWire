@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import SwiftUI
 import SafariServices
 import UserNotifications
 import RSCore
@@ -56,26 +57,66 @@ final class FeedInspectorViewController: UITableViewController {
 
 		NotificationCenter.default.addObserver(self, selector: #selector(updateNotificationSettings), name: UIApplication.willEnterForegroundNotification, object: nil)
 
-		NotificationCenter.default.addObserver(self, selector: #selector(updateSiteSignIn), name: .SiteCookiesDidChange, object: nil)
-		updateSiteSignIn()
+		NotificationCenter.default.addObserver(self, selector: #selector(updateFooter), name: .SiteCookiesDidChange, object: nil)
+		NotificationCenter.default.addObserver(self, selector: #selector(feedSettingDidChange(_:)), name: .feedSettingDidChange, object: nil)
+		updateFooter()
 	}
 
-	@objc func updateSiteSignIn() {
-		guard let title = SiteSignInViewController.toggleSignInTitle(for: feed) else {
-			tableView.tableFooterView = nil
+	@objc func feedSettingDidChange(_ note: Notification) {
+		guard let changedFeed = note.object as? Feed, changedFeed == feed, let key = note.userInfo?[Feed.SettingUserInfoKey] as? Feed.SettingKey, key == .smartFilters else {
 			return
 		}
+		updateFooter()
+	}
+
+	/// Smart Filters, and Sign In or Sign Out when the feed’s site allows it.
+	@objc func updateFooter() {
+		var buttons = [makeFooterButton(title: smartFiltersTitle) { [weak self] in
+			self?.showSmartFilters()
+		}]
+		if let title = SiteSignInViewController.toggleSignInTitle(for: feed) {
+			buttons.append(makeFooterButton(title: title) { [weak self] in
+				guard let self else {
+					return
+				}
+				SiteSignInViewController.toggleSignIn(for: self.feed, from: self)
+			})
+		}
+
+		let buttonHeight: CGFloat = 52
+		let spacing: CGFloat = 12
+		let inset: CGFloat = 20
+		let stackView = UIStackView(arrangedSubviews: buttons)
+		stackView.axis = .vertical
+		stackView.spacing = spacing
+		stackView.distribution = .fillEqually
+		stackView.frame = CGRect(x: inset, y: spacing, width: tableView.bounds.width - inset * 2, height: CGFloat(buttons.count) * buttonHeight + CGFloat(buttons.count - 1) * spacing)
+		stackView.autoresizingMask = [.flexibleWidth]
+
+		let footerView = UIView(frame: CGRect(x: 0, y: 0, width: tableView.bounds.width, height: stackView.frame.maxY))
+		footerView.addSubview(stackView)
+		tableView.tableFooterView = footerView
+	}
+
+	private var smartFiltersTitle: String {
+		let enabledCount = feed.smartFilters.filter { $0.isEnabled && $0.rule.hasConditions }.count
+		if enabledCount > 0 {
+			return String(format: NSLocalizedString("Smart Filters (%ld)", comment: "Feed Inspector smart filters button"), enabledCount)
+		}
+		return NSLocalizedString("Smart Filters", comment: "Feed Inspector smart filters button")
+	}
+
+	private func makeFooterButton(title: String, action: @escaping () -> Void) -> UIButton {
 		var configuration = UIButton.Configuration.gray()
 		configuration.title = title
-		let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
-			guard let self else {
-				return
-			}
-			SiteSignInViewController.toggleSignIn(for: self.feed, from: self)
+		return UIButton(configuration: configuration, primaryAction: UIAction { _ in
+			action()
 		})
-		button.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 64)
-		button.autoresizingMask = [.flexibleWidth]
-		tableView.tableFooterView = button
+	}
+
+	private func showSmartFilters() {
+		let hostingController = UIHostingController(rootView: SmartFiltersView(feed: feed))
+		navigationController?.pushViewController(hostingController, animated: true)
 	}
 
 	override func viewDidAppear(_ animated: Bool) {
