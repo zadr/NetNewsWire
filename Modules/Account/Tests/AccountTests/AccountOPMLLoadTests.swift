@@ -5,6 +5,7 @@
 //  Created by Brent Simmons on 8/15/26.
 //
 
+import Foundation
 import Testing
 import RSParser
 @testable import Account
@@ -57,6 +58,59 @@ import RSParser
 
 		#expect(restoredFeed.name == "My Name For It")
 		#expect(restoredFeed.editedName == "My Name For It", "The rename lives in feed settings and should survive the restore.")
+	}
+
+	@Test func importingAFileWithoutFeedsThrows() async throws {
+		let account = accountManager.createAccount(type: .onMyMac)
+		defer {
+			accountManager.deleteAccount(account)
+		}
+
+		let opml = """
+		<?xml version="1.0" encoding="UTF-8"?>
+		<opml version="1.1">
+		<body>
+		</body>
+		</opml>
+		"""
+		let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("Empty-\(UUID().uuidString).opml")
+		try opml.write(to: fileURL, atomically: true, encoding: .utf8)
+		defer {
+			try? FileManager.default.removeItem(at: fileURL)
+		}
+
+		await #expect(throws: AccountError.self) {
+			try await account.delegate.importOPML(opmlFile: fileURL)
+		}
+	}
+
+	@Test func importingAFileAddsItsFeeds() async throws {
+		let account = accountManager.createAccount(type: .onMyMac)
+		defer {
+			accountManager.deleteAccount(account)
+		}
+
+		let opml = """
+		<?xml version="1.0" encoding="UTF-8"?>
+		<opml version="1.1">
+		<body>
+		<outline text="One" title="One" type="rss" xmlUrl="https://example.com/one.xml"/>
+		<outline text="Folder" title="Folder">
+		<outline text="Two" title="Two" type="rss" xmlUrl="https://example.com/two.xml"/>
+		</outline>
+		</body>
+		</opml>
+		"""
+		let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("Feeds-\(UUID().uuidString).opml")
+		try opml.write(to: fileURL, atomically: true, encoding: .utf8)
+		defer {
+			try? FileManager.default.removeItem(at: fileURL)
+		}
+
+		try await account.delegate.importOPML(opmlFile: fileURL)
+
+		#expect(Set(account.flattenedFeeds().map { $0.url }) == ["https://example.com/one.xml", "https://example.com/two.xml"])
+		#expect(account.folders?.map { $0.name } == ["Folder"])
 	}
 
 	// MARK: - Helpers

@@ -262,8 +262,10 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 		let parserData = ParserData(url: opmlFile.absoluteString, data: opmlData)
 		let opmlDocument = try OPMLParser.parseOPML(with: parserData)
 
-		// TODO: throw appropriate error if OPML file is empty.
-		guard let opmlItems = opmlDocument.children, let rootExternalID = account.externalID else {
+		guard let opmlItems = opmlDocument.children, !opmlItems.isEmpty else {
+			throw AccountError.opmlFileHasNoFeeds
+		}
+		guard let rootExternalID = account.externalID else {
 			return
 		}
 		let normalizedItems = OPMLNormalizer.normalize(opmlItems)
