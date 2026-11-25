@@ -131,6 +131,19 @@ public indirect enum SmartFilterRule: Codable, Hashable, Sendable {
 			return !condition.value.isEmpty
 		}
 	}
+
+	/// Regex values that aren’t valid regular expressions. Conditions with them never match.
+	public var invalidRegexPatterns: [String] {
+		switch self {
+		case .group(_, let rules):
+			return rules.flatMap { $0.invalidRegexPatterns }
+		case .condition(let condition):
+			guard condition.comparison == .matchesRegex, !condition.value.isEmpty, (try? NSRegularExpression(pattern: condition.value)) == nil else {
+				return []
+			}
+			return [condition.value]
+		}
+	}
 }
 
 // MARK: - Matching

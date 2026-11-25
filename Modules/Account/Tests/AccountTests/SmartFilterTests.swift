@@ -49,6 +49,15 @@ struct SmartFilterTests {
 		#expect(!condition(.title, .matchesRegex, "(unclosed").matches(values))
 	}
 
+	@Test func invalidRegexPatterns() {
+		let rule = SmartFilterRule.group(.all, [
+			condition(.title, .matchesRegex, "(unclosed"),
+			.group(.any, [condition(.link, .matchesRegex, "^https?://"), condition(.author, .matchesRegex, "[z-a]")]),
+			condition(.title, .contains, "(not a regex")
+		])
+		#expect(rule.invalidRegexPatterns == ["(unclosed", "[z-a]"])
+	}
+
 	@Test func emptyValuesNeverMatch() {
 		#expect(!condition(.title, .contains, "").matches(values))
 		#expect(!SmartFilterRule.empty.matches(values))
