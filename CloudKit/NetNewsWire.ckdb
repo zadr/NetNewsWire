@@ -1,0 +1,86 @@
+DEFINE SCHEMA
+
+    RECORD TYPE AccountContainer (
+        "___createTime" TIMESTAMP QUERYABLE,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        isAccount       STRING QUERYABLE,
+        name            STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE AccountWebFeed (
+        "___createTime"      TIMESTAMP QUERYABLE,
+        "___createdBy"       REFERENCE,
+        "___etag"            STRING,
+        "___modTime"         TIMESTAMP,
+        "___modifiedBy"      REFERENCE,
+        "___recordID"        REFERENCE QUERYABLE,
+        containerExternalIDs LIST<STRING> QUERYABLE,
+        editedName           STRING,
+        homePageURL          STRING,
+        name                 STRING,
+        url                  STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Article (
+        "___createTime"  TIMESTAMP QUERYABLE,
+        "___createdBy"   REFERENCE,
+        "___etag"        STRING,
+        "___modTime"     TIMESTAMP,
+        "___modifiedBy"  REFERENCE,
+        "___recordID"    REFERENCE QUERYABLE,
+        articleStatus    REFERENCE,
+        contentHTML      STRING,
+        contentHTMLData  BYTES,
+        contentText      STRING,
+        contentTextData  BYTES,
+        dateModified     TIMESTAMP,
+        datePublished    TIMESTAMP,
+        externalURL      STRING,
+        imageURL         STRING,
+        parsedAuthors    LIST<STRING>,
+        summary          STRING,
+        title            STRING,
+        uniqueID         STRING,
+        url              STRING,
+        webFeedURL       STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE ArticleStatus (
+        "___createTime"   TIMESTAMP QUERYABLE,
+        "___createdBy"    REFERENCE,
+        "___etag"         STRING,
+        "___modTime"      TIMESTAMP,
+        "___modifiedBy"   REFERENCE,
+        "___recordID"     REFERENCE QUERYABLE,
+        read              STRING,
+        starred           STRING,
+        webFeedExternalID STRING QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Users (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        roles           LIST<INT64>,
+        GRANT WRITE TO "_creator",
+        GRANT READ TO "_world"
+    );
