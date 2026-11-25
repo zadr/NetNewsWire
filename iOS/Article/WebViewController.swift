@@ -1028,13 +1028,15 @@ private extension WebViewController {
 	}
 
 	func openURLInSafariViewController(_ url: URL) {
-		guard let viewController = SFSafariViewController.safeSafariViewController(url) else {
+		guard let viewController = SignedInBrowserViewController.browser(for: url, didFinish: { [weak self] in
+			self?.coordinator?.endedBrowsing()
+		}) else {
 			return
 		}
 		// Apply the resolved userInterfaceStyle before presenting to avoid a white flash in dark mode.
 		// <https://github.com/Ranchero-Software/NetNewsWire/issues/5383>
 		viewController.overrideUserInterfaceStyle = traitCollection.userInterfaceStyle
-		viewController.delegate = self
+		(viewController as? SFSafariViewController)?.delegate = self
 		coordinator?.beganBrowsing(url: url)
 		present(viewController, animated: true)
 	}

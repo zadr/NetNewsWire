@@ -80,6 +80,31 @@ public extension Notification.Name {
 		cookieHeader(for: url) != nil
 	}
 
+	/// The stored cookies for `url`’s site, for signing a browser in to it.
+	public func cookies(for url: URL) -> [HTTPCookie] {
+		guard let host = Self.host(for: url), let cookieHeader = cookieHeader(for: url) else {
+			return []
+		}
+		return Self.cookies(fromHeader: cookieHeader, host: host)
+	}
+
+	/// Only names and values survive in the stored header, so the cookies apply to the whole site.
+	static func cookies(fromHeader cookieHeader: String, host: String) -> [HTTPCookie] {
+		cookieHeader.split(separator: ";").compactMap { pair in
+			let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+			let name = parts[0].trimmingCharacters(in: .whitespaces)
+			guard parts.count == 2, !name.isEmpty else {
+				return nil
+			}
+			return HTTPCookie(properties: [
+				.name: name,
+				.value: parts[1].trimmingCharacters(in: .whitespaces),
+				.domain: ".\(host)",
+				.path: "/"
+			])
+		}
+	}
+
 	/// Stores the unexpired cookies that apply to `url`, replacing any stored before.
 	/// Returns false if there were no such cookies.
 	@discardableResult

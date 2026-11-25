@@ -688,7 +688,7 @@ final class MainFeedCollectionViewController: UICollectionViewController, Undoab
 	func openInAppBrowser() {
 		if let indexPath = coordinator.currentFeedIndexPath,
 			let url = coordinator.homePageURLForFeed(indexPath) {
-			guard let vc = SFSafariViewController.safeSafariViewController(url) else {
+			guard let vc = SignedInBrowserViewController.browser(for: url) else {
 				return
 			}
 			// Apply the resolved userInterfaceStyle before presenting to avoid a white flash in dark mode.

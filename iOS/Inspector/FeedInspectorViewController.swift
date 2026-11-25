@@ -227,9 +227,11 @@ extension FeedInspectorViewController {
 			let homePageUrlString = feed.homePageURL,
 			let homePageUrl = URL(string: homePageUrlString) {
 
-			let safari = SFSafariViewController(url: homePageUrl)
-			safari.modalPresentationStyle = .pageSheet
-			present(safari, animated: true) {
+			guard let browser = SignedInBrowserViewController.browser(for: homePageUrl) else {
+				return
+			}
+			browser.modalPresentationStyle = .pageSheet
+			present(browser, animated: true) {
 				tableView.deselectRow(at: indexPath, animated: true)
 			}
 		}
