@@ -66,6 +66,8 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 	/// the same time don’t each create one.
 	private var findOrCreateAccountTask: Task<String, Error>?
 
+	private var isPerformingRefreshAll = false
+
 	weak var account: Account?
 
 	let behaviors: AccountBehaviors = []
@@ -257,9 +259,6 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 		guard let account else {
 			return
 		}
-		guard refreshProgressInfo.isComplete else {
-			return
-		}
 
 		Self.logger.debug("CloudKitAccountDelegate: \(#function, privacy: .public)")
 		let opmlData = try Data(contentsOf: opmlFile)
@@ -284,6 +283,10 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 				let rootExternalID = try await accountExternalID(for: account)
 				try await accountZone.importOPML(rootExternalID: rootExternalID, items: normalizedItems)
 			}
+			// The imported feeds arrive with the next fetch of account zone changes. A refresh that’s
+			// already running fetched them before the import was saved, so refresh again after it.
+			// (Imports during a refresh, such as the first one after adding the account, used to be dropped.)
+			await waitForRefreshAllToFinish()
 			try? await standardRefreshAll(for: account)
 		} catch {
 			account.postSyncError(error, operation: "Importing OPML")
@@ -840,6 +843,12 @@ private extension CloudKitAccountDelegate {
 		return externalID
 	}
 
+	func waitForRefreshAllToFinish() async {
+		while isPerformingRefreshAll || !refreshProgressInfo.isComplete {
+			try? await Task.sleep(for: .milliseconds(250))
+		}
+	}
+
 	func initialRefreshAll(for account: Account) async throws {
 		try await performRefreshAll(for: account, sendArticleStatus: false)
 	}
@@ -874,6 +883,10 @@ private extension CloudKitAccountDelegate {
 	}
 
 	func performRefreshAll(for account: Account, sendArticleStatus: Bool) async throws {
+		isPerformingRefreshAll = true
+		defer {
+			isPerformingRefreshAll = false
+		}
 		lastNoChangeSyncDate = nil
 		Self.logger.debug("CloudKitAccountDelegate: \(#function, privacy: .public) sendArticleStatus: \(sendArticleStatus ? "true" : "false")")
 		defer {
