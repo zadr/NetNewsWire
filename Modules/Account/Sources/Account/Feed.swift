@@ -209,6 +209,16 @@ import Articles
 		}
 	}
 
+	/// Rules that mark new articles as read, or star them, when they arrive.
+	public var smartFilters: [SmartFilter] {
+		get {
+			settings.smartFilters ?? []
+		}
+		set {
+			settings.smartFilters = newValue.isEmpty ? nil : newValue
+		}
+	}
+
 	// MARK: - DisplayNameProvider
 
 	public var nameForDisplay: String {

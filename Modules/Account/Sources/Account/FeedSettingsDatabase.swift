@@ -34,6 +34,7 @@ final class FeedSettingsDatabase: Sendable {
 		case lastCheckDate
 		case lastResponseCode
 		case language
+		case smartFilters
 	}
 
 	struct Row {
@@ -54,6 +55,7 @@ final class FeedSettingsDatabase: Sendable {
 		let lastCheckDate: Date?
 		let lastResponseCode: Int?
 		let language: String?
+		let smartFilters: [SmartFilter]?
 	}
 
 	let databasePath: String
@@ -73,6 +75,9 @@ final class FeedSettingsDatabase: Sendable {
 			}
 			if !database.columnExists("language", inTableWithName: "feedSettings") {
 				database.executeStatements("ALTER TABLE feedSettings ADD COLUMN language TEXT;")
+			}
+			if !database.columnExists("smartFilters", inTableWithName: "feedSettings") {
+				database.executeStatements("ALTER TABLE feedSettings ADD COLUMN smartFilters TEXT;")
 			}
 		}
 		vacuumIfNeeded()
@@ -241,6 +246,18 @@ final class FeedSettingsDatabase: Sendable {
 		}
 	}
 
+	func setSmartFilters(_ smartFilters: [SmartFilter]?, for feedURL: String) {
+		serialDispatchQueue.async {
+			if let smartFilters, !smartFilters.isEmpty {
+				if let data = try? JSONEncoder().encode(smartFilters), let jsonString = String(data: data, encoding: .utf8) {
+					self.database.executeUpdate("UPDATE feedSettings SET smartFilters = ? WHERE feedURL = ?;", withArgumentsIn: [jsonString, feedURL])
+				}
+			} else {
+				self.database.executeUpdate("UPDATE feedSettings SET smartFilters = NULL WHERE feedURL = ?;", withArgumentsIn: [feedURL])
+			}
+		}
+	}
+
 	// MARK: - Deletion
 
 	func deleteSettings(for feedURL: String) {
@@ -277,7 +294,7 @@ final class FeedSettingsDatabase: Sendable {
 private extension FeedSettingsDatabase {
 
 	static let tableCreationStatements = """
-	CREATE TABLE IF NOT EXISTS feedSettings (feedURL TEXT PRIMARY KEY, feedID TEXT NOT NULL DEFAULT '', homePageURL TEXT, iconURL TEXT, faviconURL TEXT, editedName TEXT, contentHash TEXT, newArticleNotificationsEnabled INTEGER NOT NULL DEFAULT 0, readerViewAlwaysEnabled INTEGER NOT NULL DEFAULT 0, authors TEXT, conditionalGetInfoLastModified TEXT, conditionalGetInfoEtag TEXT, conditionalGetInfoDate REAL, cacheControlInfoDateCreated REAL, cacheControlInfoMaxAge REAL, externalID TEXT, folderRelationship TEXT, lastCheckDate REAL, lastResponseCode INTEGER, language TEXT);
+	CREATE TABLE IF NOT EXISTS feedSettings (feedURL TEXT PRIMARY KEY, feedID TEXT NOT NULL DEFAULT '', homePageURL TEXT, iconURL TEXT, faviconURL TEXT, editedName TEXT, contentHash TEXT, newArticleNotificationsEnabled INTEGER NOT NULL DEFAULT 0, readerViewAlwaysEnabled INTEGER NOT NULL DEFAULT 0, authors TEXT, conditionalGetInfoLastModified TEXT, conditionalGetInfoEtag TEXT, conditionalGetInfoDate REAL, cacheControlInfoDateCreated REAL, cacheControlInfoMaxAge REAL, externalID TEXT, folderRelationship TEXT, lastCheckDate REAL, lastResponseCode INTEGER, language TEXT, smartFilters TEXT);
 	"""
 
 	func row(from resultSet: FMResultSet) -> Row {
@@ -304,6 +321,11 @@ private extension FeedSettingsDatabase {
 		var folderRelationship: [String: String]?
 		if let folderData = resultSet.data(forColumn: Column.folderRelationship.rawValue) {
 			folderRelationship = try? JSONSerialization.jsonObject(with: folderData) as? [String: String]
+		}
+
+		var smartFilters: [SmartFilter]?
+		if let smartFiltersData = resultSet.data(forColumn: Column.smartFilters.rawValue) {
+			smartFilters = try? JSONDecoder().decode([SmartFilter].self, from: smartFiltersData)
 		}
 
 		var lastCheckDate: Date?
@@ -333,7 +355,8 @@ private extension FeedSettingsDatabase {
 			folderRelationship: folderRelationship,
 			lastCheckDate: lastCheckDate,
 			lastResponseCode: lastResponseCode,
-			language: resultSet.swiftString(forColumn: Column.language.rawValue)
+			language: resultSet.swiftString(forColumn: Column.language.rawValue),
+			smartFilters: smartFilters
 		)
 	}
 }
