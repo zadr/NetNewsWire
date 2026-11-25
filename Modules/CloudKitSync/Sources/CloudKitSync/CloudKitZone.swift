@@ -213,6 +213,10 @@ public extension CloudKitZone {
 						completion(.success(records))
 					}
 				case .failure(let error):
+					if Self.isMissingRecordType(error) {
+						completion(.success(records))
+						return
+					}
 					switch CloudKitZoneResult.resolve(error) {
 					case .success:
 						completion(.success(records))
@@ -519,12 +523,23 @@ public extension CloudKitZone {
 						self.modify(recordsToSave: [], recordIDsToDelete: recordIDs, completion: completion)
 					}
 				case .failure(let error):
+					if Self.isMissingRecordType(error) {
+						completion(.success(()))
+						return
+					}
 					completion(.failure(CloudKitError(error)))
 				}
 			}
 		}
 
 		database?.add(op)
+	}
+
+	/// A query for a record type the container doesn’t have yet fails with unknownItem
+	/// (“Did not find record type”). No records of that type exist, so nothing matches.
+	/// (Deleting a feed queries for its article statuses, and used to fail until one was ever saved.)
+	static func isMissingRecordType(_ error: Error) -> Bool {
+		(error as? CKError)?.code == .unknownItem
 	}
 
 	/// Delete CKRecords using a CKQuery
