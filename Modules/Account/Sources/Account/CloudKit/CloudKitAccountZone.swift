@@ -54,7 +54,9 @@ enum CloudKitAccountZoneError: LocalizedError {
 		self.zoneID = CKRecordZone.ID(zoneName: "Account", ownerName: CKCurrentUserDefaultName)
 	}
 
-	func importOPML(rootExternalID: String, items: [OPMLItem]) async throws {
+	/// Saves records for the OPML’s folders and feeds, and returns them.
+	@discardableResult
+	func importOPML(rootExternalID: String, items: [OPMLItem]) async throws -> [CKRecord] {
 		var records = [CKRecord]()
 		var feedRecords = [String: CKRecord]()
 
@@ -88,6 +90,7 @@ enum CloudKitAccountZoneError: LocalizedError {
 		}
 
 		try await save(records)
+		return records
 	}
 
 	///  Persist a feed record to iCloud and return the external key
@@ -198,7 +201,9 @@ enum CloudKitAccountZoneError: LocalizedError {
 		return records.map { $0.externalID }
 	}
 
-	private func findOrCreateAccount(completion: @escaping @Sendable (Result<String, Error>) -> Void) {
+	private static let findOrCreateAccountRetryLimit = 5
+
+	private func findOrCreateAccount(retryCount: Int = 0, completion: @escaping @Sendable (Result<String, Error>) -> Void) {
 		let predicate = NSPredicate(format: "isAccount = \"1\"")
 		let ckQuery = CKQuery(recordType: CloudKitContainer.recordType, predicate: predicate)
 
@@ -237,13 +242,18 @@ enum CloudKitAccountZoneError: LocalizedError {
 							completion(.failure(createError))
 						}
 					case .retry(let timeToWait):
+						// iCloud can keep asking to retry later; give up eventually so callers get an error.
+						guard retryCount < Self.findOrCreateAccountRetryLimit else {
+							completion(.failure(CloudKitError(error)))
+							return
+						}
 						await self.delaySeconds(timeToWait)
-						self.findOrCreateAccount(completion: completion)
+						self.findOrCreateAccount(retryCount: retryCount + 1, completion: completion)
 					case .zoneNotFound, .userDeletedZone:
 						self.createZoneRecord { result in
 							switch result {
 							case .success:
-								self.findOrCreateAccount(completion: completion)
+								self.findOrCreateAccount(retryCount: retryCount, completion: completion)
 							case .failure(let error):
 								completion(.failure(CloudKitError(error)))
 							}
