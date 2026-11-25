@@ -691,6 +691,14 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 
 		syncDatabase.resetAllSelectedForProcessing()
 
+		// Accounts that fetched top-level feeds before knowing their iCloud record are missing them
+		// for good; fetch the whole feed list once to bring them back. Feeds already here are just updated.
+		let refetchedFeedListKey = "\(account.accountID)-refetchedFeedListForUnclaimedFeeds"
+		if account.externalID != nil && !UserDefaults.standard.bool(forKey: refetchedFeedListKey) {
+			accountZone.resetChangeToken()
+		}
+		UserDefaults.standard.set(true, forKey: refetchedFeedListKey)
+
 		// Check to see if this is a new account and initialize anything we need
 		if account.externalID == nil {
 			Task {
