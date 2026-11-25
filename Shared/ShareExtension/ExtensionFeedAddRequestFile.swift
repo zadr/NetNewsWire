@@ -17,10 +17,14 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 
 	static private let logger = Logger(subsystem: Logger.nnwSubsystem, category: "ExtensionFeedAddRequestFile")
 
-	private static let filePath: String = {
-		let appGroup = Bundle.main.object(forInfoDictionaryKey: "AppGroup") as! String
-		let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
-		return containerURL!.appendingPathComponent("extension_feed_add_request.plist").path
+	/// Nil when the app isn’t signed with the app group, such as builds signed without the share extension.
+	private static let fileURL: URL? = {
+		guard let appGroup = Bundle.main.object(forInfoDictionaryKey: "AppGroup") as? String,
+			  let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+			logger.error("App group container is unavailable")
+			return nil
+		}
+		return containerURL.appendingPathComponent("extension_feed_add_request.plist")
 	}()
 
 	private let operationQueue = {
@@ -30,7 +34,7 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 	}()
 
 	var presentedItemURL: URL? {
-		URL(fileURLWithPath: ExtensionFeedAddRequestFile.filePath)
+		ExtensionFeedAddRequestFile.fileURL
 	}
 
 	var presentedItemOperationQueue: OperationQueue {
@@ -52,6 +56,9 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 			assertionFailure("start called when already did start")
 			return
 		}
+		guard Self.fileURL != nil else {
+			return
+		}
 
 		NSFileCoordinator.addFilePresenter(self)
 		Task { @MainActor in
@@ -69,6 +76,9 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 		didStart.withLock { didStart in
 			assert(didStart)
 		}
+		guard Self.fileURL != nil else {
+			return
+		}
 
 		NSFileCoordinator.addFilePresenter(self)
 		Task { @MainActor in
@@ -80,10 +90,16 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 		didStart.withLock { didStart in
 			assert(didStart)
 		}
+		guard Self.fileURL != nil else {
+			return
+		}
 		NSFileCoordinator.removeFilePresenter(self)
 	}
 
 	static func save(_ feedAddRequest: ExtensionFeedAddRequest) {
+		guard let fileURL = ExtensionFeedAddRequestFile.fileURL else {
+			return
+		}
 
 		let decoder = PropertyListDecoder()
 		let encoder = PropertyListEncoder()
@@ -91,7 +107,6 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 
 		let errorPointer: NSErrorPointer = nil
 		let fileCoordinator = NSFileCoordinator()
-		let fileURL = URL(fileURLWithPath: ExtensionFeedAddRequestFile.filePath)
 
 		fileCoordinator.coordinate(writingItemAt: fileURL, options: [.forMerging], error: errorPointer, byAccessor: { url in
 			do {
@@ -123,6 +138,9 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 @MainActor private extension ExtensionFeedAddRequestFile {
 
 	func process() {
+		guard let fileURL = ExtensionFeedAddRequestFile.fileURL else {
+			return
+		}
 
 		let decoder = PropertyListDecoder()
 		let encoder = PropertyListEncoder()
@@ -130,7 +148,6 @@ final class ExtensionFeedAddRequestFile: NSObject, NSFilePresenter, Sendable {
 
 		let errorPointer: NSErrorPointer = nil
 		let fileCoordinator = NSFileCoordinator(filePresenter: self)
-		let fileURL = URL(fileURLWithPath: ExtensionFeedAddRequestFile.filePath)
 
 		var requests: [ExtensionFeedAddRequest]?
 

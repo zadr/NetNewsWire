@@ -17,10 +17,14 @@ import Account
 
 	static private let logger = Logger(subsystem: Logger.nnwSubsystem, category: "ExtensionContainersFile")
 
-	private static var filePath: String = {
-		let appGroup = Bundle.main.object(forInfoDictionaryKey: "AppGroup") as! String
-		let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
-		return containerURL!.appendingPathComponent("extension_containers.plist").path
+	/// Nil when the app isn’t signed with the app group, such as builds signed without the share extension.
+	private static let fileURL: URL? = {
+		guard let appGroup = Bundle.main.object(forInfoDictionaryKey: "AppGroup") as? String,
+			  let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
+			logger.error("App group container is unavailable")
+			return nil
+		}
+		return containerURL.appendingPathComponent("extension_containers.plist")
 	}()
 
 	private var isActive = false
@@ -38,7 +42,10 @@ import Account
 		}
 		isActive = true
 
-		if !FileManager.default.fileExists(atPath: ExtensionContainersFile.filePath) {
+		guard let fileURL = Self.fileURL else {
+			return
+		}
+		if !FileManager.default.fileExists(atPath: fileURL.path) {
 			save()
 		}
 
@@ -50,9 +57,11 @@ import Account
 
 	/// Reads and decodes the shared plist file.
 	static func read() -> ExtensionContainers? {
+		guard let fileURL = ExtensionContainersFile.fileURL else {
+			return nil
+		}
 		let errorPointer: NSErrorPointer = nil
 		let fileCoordinator = NSFileCoordinator()
-		let fileURL = URL(fileURLWithPath: ExtensionContainersFile.filePath)
 		var extensionContainers: ExtensionContainers?
 
 		fileCoordinator.coordinate(readingItemAt: fileURL, options: [], error: errorPointer, byAccessor: { readURL in
@@ -89,12 +98,14 @@ import Account
 	}
 
 	func save() {
+		guard let fileURL = ExtensionContainersFile.fileURL else {
+			return
+		}
 		let encoder = PropertyListEncoder()
 		encoder.outputFormat = .binary
 
 		let errorPointer: NSErrorPointer = nil
 		let fileCoordinator = NSFileCoordinator()
-		let fileURL = URL(fileURLWithPath: ExtensionContainersFile.filePath)
 
 		fileCoordinator.coordinate(writingItemAt: fileURL, options: [], error: errorPointer, byAccessor: { writeURL in
 			do {
