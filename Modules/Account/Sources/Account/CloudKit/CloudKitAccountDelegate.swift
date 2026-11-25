@@ -66,7 +66,7 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 	/// the same time don’t each create one.
 	private var findOrCreateAccountTask: Task<String, Error>?
 
-	private var isPerformingRefreshAll = false
+	private var isFetchingAccountZoneChanges = false
 
 	weak var account: Account?
 
@@ -283,11 +283,10 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 				let rootExternalID = try await accountExternalID(for: account)
 				try await accountZone.importOPML(rootExternalID: rootExternalID, items: normalizedItems)
 			}
-			// The imported feeds arrive with the next fetch of account zone changes. A refresh that’s
-			// already running fetched them before the import was saved, so refresh again after it.
-			// (Imports during a refresh, such as the first one after adding the account, used to be dropped.)
-			await waitForRefreshAllToFinish()
-			try? await standardRefreshAll(for: account)
+			// The imported folders and feeds come into the account from iCloud, like any other change,
+			// and the import fails if fetching them does. (It used to wait for a whole refresh, feed
+			// downloads included, and then discard the fetch’s errors.)
+			try await fetchAccountZoneChanges(for: account)
 		} catch {
 			account.postSyncError(error, operation: "Importing OPML")
 			throw error
@@ -843,9 +842,21 @@ private extension CloudKitAccountDelegate {
 		return externalID
 	}
 
-	func waitForRefreshAllToFinish() async {
-		while isPerformingRefreshAll || !refreshProgressInfo.isComplete {
-			try? await Task.sleep(for: .milliseconds(250))
+	/// Fetches changes to the account’s folders and feeds. One at a time: a fetch that’s
+	/// already running, such as a refresh’s, finishes first.
+	func fetchAccountZoneChanges(for account: Account) async throws {
+		while isFetchingAccountZoneChanges {
+			try? await Task.sleep(for: .milliseconds(100))
+		}
+		isFetchingAccountZoneChanges = true
+		defer {
+			isFetchingAccountZoneChanges = false
+		}
+
+		let activityLog = ActivityLog.shared
+		let fetchChangesDetail = "Fetching account zone changes \(activityLog.nextTaskNumberString())"
+		try await activityLog.logActivity(owner: account.activityOwner, kind: .refreshFeedList, detail: fetchChangesDetail) {
+			try await accountZone.fetchChangesInZone()
 		}
 	}
 
@@ -883,10 +894,6 @@ private extension CloudKitAccountDelegate {
 	}
 
 	func performRefreshAll(for account: Account, sendArticleStatus: Bool) async throws {
-		isPerformingRefreshAll = true
-		defer {
-			isPerformingRefreshAll = false
-		}
 		lastNoChangeSyncDate = nil
 		Self.logger.debug("CloudKitAccountDelegate: \(#function, privacy: .public) sendArticleStatus: \(sendArticleStatus ? "true" : "false")")
 		defer {
@@ -916,15 +923,11 @@ private extension CloudKitAccountDelegate {
 			}
 		}
 
-		let fetchChangesDetail = "Fetching account zone changes \(activityLog.nextTaskNumberString())"
-
 		// When iCloud fails, note the error but keep going — downloading feeds requires
 		// no iCloud, and syncing catches up on a later refresh.
 		// <https://github.com/Ranchero-Software/NetNewsWire/issues/4115>
 		do {
-			try await activityLog.logActivity(owner: owner, kind: .refreshFeedList, detail: fetchChangesDetail) {
-				try await accountZone.fetchChangesInZone()
-			}
+			try await fetchAccountZoneChanges(for: account)
 		} catch {
 			if case CloudKitZoneError.userDeletedZone = error {
 				account.removeFeedsFromTreeAtTopLevel(account.topLevelFeeds)
