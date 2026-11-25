@@ -838,6 +838,10 @@ private extension CloudKitAccountDelegate {
 			findOrCreateAccountTask = nil
 		}
 		let externalID = try await task.value
+		// A fetch of the account’s changes may have brought in its record while this looked for it.
+		if let externalID = account.externalID {
+			return externalID
+		}
 		account.externalID = externalID
 		return externalID
 	}

@@ -28,7 +28,7 @@ final class CloudKitAcountZoneDelegate: CloudKitZoneDelegate {
 	/// Number of records deleted in the most recent sync.
 	private(set) var lastDeletedCount = 0
 
-	init(account: Account, articlesZone: CloudKitArticlesZone) {
+	init(account: Account, articlesZone: CloudKitArticlesZone?) {
 		self.account = account
 		self.articlesZone = articlesZone
 	}
@@ -96,9 +96,13 @@ final class CloudKitAcountZoneDelegate: CloudKitZoneDelegate {
 	@MainActor func addOrUpdateContainer(_ record: CKRecord) {
 		guard let account = account,
 			let name = record[CloudKitAccountZone.CloudKitContainer.Fields.name] as? String,
-			let isAccount = record[CloudKitAccountZone.CloudKitContainer.Fields.isAccount] as? String,
-			isAccount != "1" else {
+			let isAccount = record[CloudKitAccountZone.CloudKitContainer.Fields.isAccount] as? String else {
 				return
+		}
+
+		if isAccount == "1" {
+			addAccountRecord(record.externalID)
+			return
 		}
 
 		var folder = account.existingFolder(withExternalID: record.externalID)
@@ -143,6 +147,33 @@ final class CloudKitAcountZoneDelegate: CloudKitZoneDelegate {
 }
 
 private extension CloudKitAcountZoneDelegate {
+
+	/// Top-level feeds name the account’s iCloud record as their container. Fetched before a new
+	/// account knows that record, they wait for it like feeds wait for a folder, so place them now.
+	@MainActor func addAccountRecord(_ externalID: String) {
+		guard let account else { return }
+
+		if account.externalID == nil {
+			account.externalID = externalID
+		}
+
+		if let newUnclaimedFeeds = newUnclaimedFeeds.removeValue(forKey: externalID) {
+			for newUnclaimedFeed in newUnclaimedFeeds {
+				createFeedIfNecessary(url: newUnclaimedFeed.url,
+										 name: newUnclaimedFeed.name,
+										 editedName: newUnclaimedFeed.editedName,
+										 homePageURL: newUnclaimedFeed.homePageURL,
+										 feedExternalID: newUnclaimedFeed.feedExternalID,
+										 container: account)
+			}
+		}
+
+		if let existingUnclaimedFeeds = existingUnclaimedFeeds.removeValue(forKey: externalID) {
+			for existingUnclaimedFeed in existingUnclaimedFeeds {
+				account.addFeedToTreeAtTopLevel(existingUnclaimedFeed)
+			}
+		}
+	}
 
 	@MainActor func updateFeed(_ feed: Feed, name: String?, editedName: String?, homePageURL: String?, containerExternalIDs: [String]) {
 		guard let account = account else { return }
