@@ -21,6 +21,7 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 	@IBOutlet var newArticleNotificationsEnabledCheckBox: NSButton!
 	@IBOutlet var readerViewAlwaysEnabledCheckBox: NSButton?
 	@IBOutlet var siteSignInButton: NSButton?
+	@IBOutlet var smartFiltersButton: NSButton?
 
 	private var feed: Feed? {
 		didSet {
@@ -57,6 +58,7 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 		NotificationCenter.default.addObserver(self, selector: #selector(handleFeedIconImageDidChange(_:)), name: .feedIconImageDidChange, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(updateUI), name: .DidUpdateFeedPreferencesFromContextMenu, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(siteCookiesDidChange(_:)), name: .SiteCookiesDidChange, object: nil)
+		NotificationCenter.default.addObserver(self, selector: #selector(feedSettingDidChange(_:)), name: .feedSettingDidChange, object: nil)
 	}
 
 	override func viewDidAppear() {
@@ -129,6 +131,13 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 		}
 	}
 
+	@IBAction func smartFiltersButtonClicked(_ sender: Any) {
+		guard let feed else {
+			return
+		}
+		SmartFiltersWindowController.show(for: feed)
+	}
+
 	// MARK: Notifications
 
 	@objc func handleFeedIconImageDidChange(_ notification: Notification) {
@@ -137,6 +146,13 @@ final class FeedInspectorViewController: NSViewController, Inspector {
 
 	@objc func siteCookiesDidChange(_ note: Notification) {
 		updateSiteSignIn()
+	}
+
+	@objc func feedSettingDidChange(_ note: Notification) {
+		guard let changedFeed = note.object as? Feed, changedFeed == feed, let key = note.userInfo?[Feed.SettingUserInfoKey] as? Feed.SettingKey, key == .smartFilters else {
+			return
+		}
+		updateSmartFilters()
 	}
 }
 
@@ -165,6 +181,7 @@ private extension FeedInspectorViewController {
 		updateNewArticleNotificationsEnabled()
 		updateReaderViewAlwaysEnabled()
 		updateSiteSignIn()
+		updateSmartFilters()
 		windowTitle = feed?.nameForDisplay ?? NSLocalizedString("Feed Inspector", comment: "Feed Inspector window title")
 		readerViewAlwaysEnabledCheckBox?.isEnabled = true
 		view.needsLayout = true
@@ -223,6 +240,20 @@ private extension FeedInspectorViewController {
 		let canUseCookies = SiteCookies.canUseCookies(for: feed)
 		siteSignInButton.isEnabled = canUseCookies
 		siteSignInButton.toolTip = canUseCookies ? NSLocalizedString("Sign in to get full-text articles from sites that require it.", comment: "Feed Inspector sign-in button tooltip") : NSLocalizedString("Signing in to sites works only for On My Mac and iCloud accounts.", comment: "Feed Inspector sign-in button tooltip")
+	}
+
+	func updateSmartFilters() {
+		guard let smartFiltersButton else {
+			return
+		}
+		let enabledCount = feed?.smartFilters.filter { $0.isEnabled && $0.rule.hasConditions }.count ?? 0
+		if enabledCount > 0 {
+			smartFiltersButton.title = String(format: NSLocalizedString("Smart Filters (%ld)…", comment: "Feed Inspector smart filters button"), enabledCount)
+		} else {
+			smartFiltersButton.title = NSLocalizedString("Smart Filters…", comment: "Feed Inspector smart filters button")
+		}
+		smartFiltersButton.isEnabled = feed != nil
+		smartFiltersButton.toolTip = NSLocalizedString("Mark as read, or star, new articles that match rules you choose.", comment: "Feed Inspector smart filters button tooltip")
 	}
 
 	func updateNotificationSettings() {
