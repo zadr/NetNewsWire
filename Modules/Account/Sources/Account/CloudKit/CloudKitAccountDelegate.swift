@@ -62,6 +62,10 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 	// <https://github.com/Ranchero-Software/NetNewsWire/issues/4115>
 	private var iCloudAccountIsUnavailable = false
 
+	/// Finding or creating the account’s iCloud record, shared so callers that need it at
+	/// the same time don’t each create one.
+	private var findOrCreateAccountTask: Task<String, Error>?
+
 	weak var account: Account?
 
 	let behaviors: AccountBehaviors = []
@@ -265,9 +269,6 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 		guard let opmlItems = opmlDocument.children, !opmlItems.isEmpty else {
 			throw AccountError.opmlFileHasNoFeeds
 		}
-		guard let rootExternalID = account.externalID else {
-			return
-		}
 		let normalizedItems = OPMLNormalizer.normalize(opmlItems)
 
 		syncProgress.addTask()
@@ -278,6 +279,9 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 
 		do {
 			try await account.logActivity(kind: .importOPML, detail: opmlFile.lastPathComponent) {
+				// A new account gets its iCloud record in the background; an import right after adding
+				// the account used to be dropped, without an error, until that finished.
+				let rootExternalID = try await accountExternalID(for: account)
 				try await accountZone.importOPML(rootExternalID: rootExternalID, items: normalizedItems)
 			}
 			try? await standardRefreshAll(for: account)
@@ -688,8 +692,7 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 		if account.externalID == nil {
 			Task {
 				do {
-					let externalID = try await accountZone.findOrCreateAccount()
-					account.externalID = externalID
+					_ = try await self.accountExternalID(for: account)
 					try? await self.initialRefreshAll(for: account)
 				} catch {
 					Self.logger.error("CloudKitAccountDelegate: \(#function, privacy: .public) error: \(error.localizedDescription)")
@@ -815,6 +818,27 @@ private extension CloudKitAccountDelegate {
 // MARK: - Private
 
 private extension CloudKitAccountDelegate {
+
+	/// The account’s iCloud record ID, finding or creating the record when the account doesn’t have one yet.
+	func accountExternalID(for account: Account) async throws -> String {
+		if let externalID = account.externalID {
+			return externalID
+		}
+		if let findOrCreateAccountTask {
+			return try await findOrCreateAccountTask.value
+		}
+
+		let task = Task { @MainActor in
+			try await accountZone.findOrCreateAccount()
+		}
+		findOrCreateAccountTask = task
+		defer {
+			findOrCreateAccountTask = nil
+		}
+		let externalID = try await task.value
+		account.externalID = externalID
+		return externalID
+	}
 
 	func initialRefreshAll(for account: Account) async throws {
 		try await performRefreshAll(for: account, sendArticleStatus: false)
