@@ -281,28 +281,16 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 				// A new account gets its iCloud record in the background; an import right after adding
 				// the account used to be dropped, without an error, until that finished.
 				let rootExternalID = try await accountExternalID(for: account)
-				let records = try await accountZone.importOPML(rootExternalID: rootExternalID, items: normalizedItems)
-				// Add the folders and feeds now, the way fetching zone changes would, instead of waiting
-				// for a fetch. A failed fetch used to leave an import with nothing to show and no error.
-				addImportedRecordsToTree(records)
+				try await accountZone.importOPML(rootExternalID: rootExternalID, items: normalizedItems)
 			}
+			// The imported feeds arrive with the next fetch of account zone changes. A refresh that’s
+			// already running fetched them before the import was saved, so refresh again after it.
+			// (Imports during a refresh, such as the first one after adding the account, used to be dropped.)
+			await waitForRefreshAllToFinish()
+			try? await standardRefreshAll(for: account)
 		} catch {
 			account.postSyncError(error, operation: "Importing OPML")
 			throw error
-		}
-
-		// Download the new feeds. A refresh that’s already running started before they were added,
-		// so refresh again once it’s done.
-		Task { @MainActor [weak self] in
-			guard let self, let account = self.account else {
-				return
-			}
-			await self.waitForRefreshAllToFinish()
-			do {
-				try await self.standardRefreshAll(for: account)
-			} catch {
-				Self.logger.error("CloudKitAccountDelegate: refresh after importing OPML failed: \(error.localizedDescription)")
-			}
 		}
 	}
 
@@ -833,19 +821,6 @@ private extension CloudKitAccountDelegate {
 // MARK: - Private
 
 private extension CloudKitAccountDelegate {
-
-	func addImportedRecordsToTree(_ records: [CKRecord]) {
-		guard let zoneDelegate = accountZone.delegate as? CloudKitAcountZoneDelegate else {
-			return
-		}
-		// Folders first, so feeds in them find their folder.
-		for record in records where record.recordType == CloudKitAccountZone.CloudKitContainer.recordType {
-			zoneDelegate.addOrUpdateContainer(record)
-		}
-		for record in records where record.recordType == CloudKitAccountZone.CloudKitFeed.recordType {
-			zoneDelegate.addOrUpdateFeed(record)
-		}
-	}
 
 	/// The account’s iCloud record ID, finding or creating the record when the account doesn’t have one yet.
 	func accountExternalID(for account: Account) async throws -> String {
