@@ -62,6 +62,12 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 	// <https://github.com/Ranchero-Software/NetNewsWire/issues/4115>
 	private var iCloudAccountIsUnavailable = false
 
+	/// Finding or creating the account’s iCloud record, shared so callers that need it at
+	/// the same time don’t each create one.
+	private var findOrCreateAccountTask: Task<String, Error>?
+
+	private var isPerformingRefreshAll = false
+
 	weak var account: Account?
 
 	let behaviors: AccountBehaviors = []
@@ -253,18 +259,14 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 		guard let account else {
 			return
 		}
-		guard refreshProgressInfo.isComplete else {
-			return
-		}
 
 		Self.logger.debug("CloudKitAccountDelegate: \(#function, privacy: .public)")
 		let opmlData = try Data(contentsOf: opmlFile)
 		let parserData = ParserData(url: opmlFile.absoluteString, data: opmlData)
 		let opmlDocument = try OPMLParser.parseOPML(with: parserData)
 
-		// TODO: throw appropriate error if OPML file is empty.
-		guard let opmlItems = opmlDocument.children, let rootExternalID = account.externalID else {
-			return
+		guard let opmlItems = opmlDocument.children, !opmlItems.isEmpty else {
+			throw AccountError.opmlFileHasNoFeeds
 		}
 		let normalizedItems = OPMLNormalizer.normalize(opmlItems)
 
@@ -276,8 +278,15 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 
 		do {
 			try await account.logActivity(kind: .importOPML, detail: opmlFile.lastPathComponent) {
+				// A new account gets its iCloud record in the background; an import right after adding
+				// the account used to be dropped, without an error, until that finished.
+				let rootExternalID = try await accountExternalID(for: account)
 				try await accountZone.importOPML(rootExternalID: rootExternalID, items: normalizedItems)
 			}
+			// The imported feeds arrive with the next fetch of account zone changes. A refresh that’s
+			// already running fetched them before the import was saved, so refresh again after it.
+			// (Imports during a refresh, such as the first one after adding the account, used to be dropped.)
+			await waitForRefreshAllToFinish()
 			try? await standardRefreshAll(for: account)
 		} catch {
 			account.postSyncError(error, operation: "Importing OPML")
@@ -686,8 +695,7 @@ enum CloudKitAccountDelegateError: LocalizedError, Sendable {
 		if account.externalID == nil {
 			Task {
 				do {
-					let externalID = try await accountZone.findOrCreateAccount()
-					account.externalID = externalID
+					_ = try await self.accountExternalID(for: account)
 					try? await self.initialRefreshAll(for: account)
 				} catch {
 					Self.logger.error("CloudKitAccountDelegate: \(#function, privacy: .public) error: \(error.localizedDescription)")
@@ -814,6 +822,33 @@ private extension CloudKitAccountDelegate {
 
 private extension CloudKitAccountDelegate {
 
+	/// The account’s iCloud record ID, finding or creating the record when the account doesn’t have one yet.
+	func accountExternalID(for account: Account) async throws -> String {
+		if let externalID = account.externalID {
+			return externalID
+		}
+		if let findOrCreateAccountTask {
+			return try await findOrCreateAccountTask.value
+		}
+
+		let task = Task { @MainActor in
+			try await accountZone.findOrCreateAccount()
+		}
+		findOrCreateAccountTask = task
+		defer {
+			findOrCreateAccountTask = nil
+		}
+		let externalID = try await task.value
+		account.externalID = externalID
+		return externalID
+	}
+
+	func waitForRefreshAllToFinish() async {
+		while isPerformingRefreshAll || !refreshProgressInfo.isComplete {
+			try? await Task.sleep(for: .milliseconds(250))
+		}
+	}
+
 	func initialRefreshAll(for account: Account) async throws {
 		try await performRefreshAll(for: account, sendArticleStatus: false)
 	}
@@ -848,6 +883,10 @@ private extension CloudKitAccountDelegate {
 	}
 
 	func performRefreshAll(for account: Account, sendArticleStatus: Bool) async throws {
+		isPerformingRefreshAll = true
+		defer {
+			isPerformingRefreshAll = false
+		}
 		lastNoChangeSyncDate = nil
 		Self.logger.debug("CloudKitAccountDelegate: \(#function, privacy: .public) sendArticleStatus: \(sendArticleStatus ? "true" : "false")")
 		defer {
