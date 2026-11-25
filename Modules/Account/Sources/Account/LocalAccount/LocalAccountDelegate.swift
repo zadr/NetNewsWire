@@ -76,9 +76,8 @@ import Secrets
 			let parserData = ParserData(url: opmlFile.absoluteString, data: opmlData)
 			let opmlDocument = try OPMLParser.parseOPML(with: parserData)
 
-			// TODO: throw appropriate error for empty OPML
-			guard let children = opmlDocument.children else {
-				return
+			guard let children = opmlDocument.children, !children.isEmpty else {
+				throw AccountError.opmlFileHasNoFeeds
 			}
 
 			BatchUpdate.shared.perform {
