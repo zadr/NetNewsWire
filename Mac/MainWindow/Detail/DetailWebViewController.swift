@@ -419,14 +419,26 @@ private extension DetailWebViewController {
 
 		var html = try! MacroProcessor.renderedText(withTemplate: ArticleRenderer.page.html, substitutions: substitutions)
 		html = ArticleRenderingSpecialCases.filterHTMLIfNeeded(baseURL: rendering.baseURL, html: html)
-		// When the old article may still be scrolling, swap in a fresh web view for the
+
+		// A playing video moves into picture in picture, taking its web view along.
+		//
+		// Otherwise, when the old article may still be scrolling, swap in a fresh web view for the
 		// new content. Scrolling momentum lives in the web content process and survives
 		// loading new HTML — replacing the web view is what keeps a flick on the old
 		// article from scrolling the new one.
 		// The old web view stays on top until the new one finishes loading, which also
 		// covers the new web view's first paint.
 		// <https://github.com/Ranchero-Software/NetNewsWire/issues/901>
-		if !webView.isHidden && webViewMayStillBeScrolling {
+		let oldWebView = webView!
+		let oldWebViewHasFocus = (view.window?.firstResponder as? NSView)?.isDescendant(of: oldWebView) ?? false
+		if PictureInPictureKeeper.shared.keepPlaying(oldWebView) {
+			let newWebView = createWebView()
+			view.addSubview(newWebView)
+			webView = newWebView
+			if oldWebViewHasFocus {
+				view.window?.makeFirstResponder(newWebView)
+			}
+		} else if !webView.isHidden && webViewMayStillBeScrolling {
 			Self.logger.debug("DetailWebViewController: swapping in a fresh web view because the old one may still be scrolling")
 			let newWebView = createWebView()
 			view.addSubview(newWebView, positioned: .below, relativeTo: webView)

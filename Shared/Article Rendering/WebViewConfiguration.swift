@@ -134,6 +134,8 @@ private extension WebViewConfiguration {
 		preferences.isElementFullscreenEnabled = UIDevice.current.userInterfaceIdiom != .pad
 #else
 		preferences.isElementFullscreenEnabled = true
+		// Off by default on the Mac, where videos then refuse picture in picture.
+		preferences._allowsPictureInPictureMediaPlayback = true
 #endif
 
 		return preferences
@@ -147,6 +149,7 @@ private extension WebViewConfiguration {
 		if let contentBlockingRuleList {
 			userContentController.add(contentBlockingRuleList)
 		}
+		PictureInPictureKeeper.shared.addUserScript(to: userContentController)
 		return userContentController
 	}
 

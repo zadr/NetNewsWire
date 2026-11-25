@@ -377,6 +377,11 @@ final class WebViewController: UIViewController {
 		guard let webView = webView else {
 			return
 		}
+		// A playing video moves into picture in picture, taking its web view along.
+		if PictureInPictureKeeper.shared.keepPlaying(webView) {
+			loadWebView()
+			return
+		}
 		// Resetting iframe src during an element-fullscreen transition triggers a WebKit
 		// RELEASE_ASSERT. Exit fullscreen first.
 		// <https://github.com/Ranchero-Software/NetNewsWire/issues/5382>
@@ -670,9 +675,12 @@ private extension WebViewController {
 	func loadWebView(replaceExistingWebView: Bool = false) {
 		guard isViewLoaded else { return }
 
+		// A playing video moves into picture in picture, taking its web view along.
 		// Never render into a web view whose content process died — the load
 		// can fail silently, leaving the article view blank.
-		if !replaceExistingWebView, !webViewProcessDidTerminate, let webView = webView {
+		if let webView, PictureInPictureKeeper.shared.keepPlaying(webView) {
+			// Render into a fresh web view.
+		} else if !replaceExistingWebView, !webViewProcessDidTerminate, let webView = webView {
 			self.renderPage(webView)
 			return
 		}
