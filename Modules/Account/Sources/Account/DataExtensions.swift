@@ -36,6 +36,7 @@ public extension Feed {
 		case lastCheckDate
 		case lastResponseCode
 		case language
+		case smartFilters
 	}
 }
 

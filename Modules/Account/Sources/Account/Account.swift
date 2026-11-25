@@ -936,6 +936,7 @@ public enum FetchType {
 		precondition(type == .onMyMac || type == .cloudKit)
 
 		let articleChanges = await database.updateAsync(parsedItems: parsedItems, feedID: feedID, deleteOlder: deleteOlder)
+		await applySmartFilters(to: articleChanges.new)
 		sendNotificationAbout(articleChanges)
 		return articleChanges
 	}
@@ -950,8 +951,44 @@ public enum FetchType {
 		}
 
 		let newAndUpdatedArticles = await database.updateAsync(feedIDsAndItems: feedIDsAndItems, defaultRead: defaultRead)
+		await applySmartFilters(to: newAndUpdatedArticles.new)
 		sendNotificationAbout(newAndUpdatedArticles)
 		return newAndUpdatedArticles
+	}
+
+	/// Marks new articles as read, or stars them, when they match their feed’s smart filters.
+	/// Goes through the delegate so sync services get the changes.
+	/// Runs before new-article notifications, which skip articles marked as read here.
+	func applySmartFilters(to articles: Set<Article>?) async {
+		guard let articles, !articles.isEmpty else {
+			return
+		}
+
+		var articleIDsToMark = [SmartFilter.Action: Set<String>]()
+		for (feedID, feedArticles) in Dictionary(grouping: articles, by: { $0.feedID }) {
+			guard let feed = existingFeed(withFeedID: feedID) else {
+				continue
+			}
+			let filters = feed.smartFilters.filter { $0.isEnabled && $0.rule.hasConditions }
+			guard !filters.isEmpty else {
+				continue
+			}
+			for article in feedArticles {
+				let values = SmartFilterField.values(for: article, feed: feed)
+				for filter in filters where !article.status.boolStatus(forKey: filter.action.statusKey) && filter.rule.matches(values) {
+					articleIDsToMark[filter.action, default: Set<String>()].insert(article.articleID)
+				}
+			}
+		}
+
+		for (action, articleIDs) in articleIDsToMark {
+			Self.logger.info("Account: smart filters \(action.rawValue, privacy: .public) \(articleIDs.count, privacy: .public) new articles")
+			do {
+				try await delegate.markArticles(articleIDs: articleIDs, statusKey: action.statusKey, flag: true)
+			} catch {
+				Self.logger.error("Account: smart filters could not \(action.rawValue, privacy: .public) articles: \(error.localizedDescription)")
+			}
+		}
 	}
 
 	/// Mark statuses for articleIDs. Returns the articleIDs whose status actually changed.

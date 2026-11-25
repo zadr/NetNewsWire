@@ -178,6 +178,15 @@ import Articles
 		}
 	}
 
+	var smartFilters: [SmartFilter]? {
+		didSet {
+			if smartFilters != oldValue {
+				database.setSmartFilters(smartFilters, for: feedURL)
+				postSettingDidChange(.smartFilters)
+			}
+		}
+	}
+
 	/// Create from database row (bulk load at startup).
 	init(feedURL: String, row: FeedSettingsDatabase.Row, database: FeedSettingsDatabase) {
 		self.feedURL = feedURL
@@ -199,6 +208,7 @@ import Articles
 		self.lastCheckDate = row.lastCheckDate
 		self.lastResponseCode = row.lastResponseCode
 		self.language = row.language
+		self.smartFilters = row.smartFilters
 	}
 
 	/// Create for a new feed not yet in the database.
